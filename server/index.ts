@@ -24,6 +24,20 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Allow cross-origin calls from deployed frontend (Netlify) to Render
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept"
+    );
+    res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
   // Guard against malformed encoded URLs (e.g., "/%VITE_ANALYTICS_ENDPOINT%/umami")
   app.use((req, res, next) => {
     try {
