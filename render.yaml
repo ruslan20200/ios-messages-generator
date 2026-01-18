@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: ios-messages-server
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: "pnpm install --frozen-lockfile && pnpm build"
+    startCommand: "pnpm start"
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: ONAY_APP_TOKEN
+        value: "" # set in Render dashboard
+      - key: ONAY_DEVICE_ID
+        value: ""
+      - key: ONAY_PHONE_NUMBER
+        value: ""
+      - key: ONAY_PASSWORD
+        value: ""
+      - key: ONAY_PUSH_TOKEN
+        value: ""
+      - key: ONAY_BASE_URL
+        value: "https://nwqsr0rz5earuiy2t8z8.tha.kz"
+      - key: ONAY_OS
+        value: "2"
+      - key: ONAY_VERSION
+        value: "3.2.1"
+      - key: ONAY_USER_AGENT
+        value: "Onay/3.2.1 (kz.onay.Onay; build:6; iOS 26.2.0) Alamofire/5.4.4"
+      - key: ONAY_CITY_ID
+        value: "1"
+      - key: ONAY_VERBOSE_LOGS
+        value: "false"
+      - key: PUBLIC_BASE_URL
+        value: "https://<your-render-app>.onrender.com"

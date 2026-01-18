@@ -19,12 +19,13 @@ export interface Message {
 interface ChatSettings {
   route: string;
   number: string;
+  price: string;
 }
 
 interface ChatContextType {
   settings: ChatSettings;
   messages: Message[];
-  updateSettings: (route: string, number: string) => void;
+  updateSettings: (route: string, number: string, price?: string) => void;
   sendMessage: (code: string) => void;
   clearHistory: () => void;
 }
@@ -33,11 +34,23 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 const STORAGE_KEY_SETTINGS = "ios_msg_settings";
 const STORAGE_KEY_MESSAGES = "ios_msg_history";
+// API чат хранится отдельно, чистим вместе с ручным
+const STORAGE_KEY_MESSAGES_API = "ios_msg_history_api";
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
+  const defaultSettings: ChatSettings = { route: "", number: "", price: "120₸" };
+
   const [settings, setSettings] = useState<ChatSettings>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
-    return saved ? JSON.parse(saved) : { route: "", number: "" };
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        route: parsed.route || "",
+        number: parsed.number || "",
+        price: parsed.price || "120₸",
+      };
+    }
+    return defaultSettings;
   });
 
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -60,8 +73,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages));
   }, [messages]);
 
-  const updateSettings = (route: string, number: string) => {
-    setSettings({ route, number });
+  const updateSettings = (route: string, number: string, price?: string) => {
+    setSettings({ route, number, price: price || settings.price || "120₸" });
   };
 
   const generateSuffix = () => {
@@ -92,7 +105,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const suffix = generateSuffix();
     const formattedDate = format(now, "dd/MM HH:mm");
     
-    const responseText = `ONAY! ALA\nAT ${formattedDate}\n${settings.route},${settings.number},120₸\nhttp://qr.tha.kz/${suffix}`;
+    const price = settings.price || "120₸";
+    const responseText = `ONAY! ALA\nAT ${formattedDate}\n${settings.route},${settings.number},${price}\nhttp://qr.tha.kz/${suffix}`;
 
     const systemMsg: Message = {
       id: nanoid(),
@@ -102,7 +116,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       details: {
         route: settings.route,
         number: settings.number,
-        price: "120₸",
+        price,
         suffix: suffix,
         link: `http://qr.tha.kz/${suffix}`
       }
@@ -113,6 +127,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const clearHistory = () => {
     localStorage.removeItem(STORAGE_KEY_MESSAGES);
+    localStorage.removeItem(STORAGE_KEY_MESSAGES_API);
     setMessages([]);
   };
 

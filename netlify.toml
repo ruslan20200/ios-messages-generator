@@ -1,0 +1,10 @@
+[build]
+  command = "pnpm install --frozen-lockfile && pnpm build"
+  publish = "dist/public"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[dev]
+  command = "pnpm dev"
+  port = 5173

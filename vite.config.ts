@@ -24,9 +24,15 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 3000,
-    strictPort: false, // Will find next available port if 3000 is busy
+    port: 5173,
+    strictPort: false,
     host: true,
+    proxy: {
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+    },
     allowedHosts: [
       ".manuspre.computer",
       ".manus.computer",
@@ -35,6 +41,8 @@ export default defineConfig({
       ".manusvm.computer",
       "localhost",
       "127.0.0.1",
+      ".ngrok-free.app",
+      "21262ba387b7.ngrok-free.app",
     ],
     fs: {
       strict: true,
