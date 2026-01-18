@@ -9,6 +9,28 @@ const API_STORAGE_KEY = "ios_msg_history_api";
 const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 
+async function fetchWithRetry(path: string, init: RequestInit, attempts = 3, delayMs = 3000) {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const resp = await fetch(apiUrl(path), init);
+      if (resp.status >= 500 && i < attempts - 1) {
+        await new Promise((res) => setTimeout(res, delayMs));
+        continue;
+      }
+      return resp;
+    } catch (err) {
+      lastError = err;
+      if (i < attempts - 1) {
+        await new Promise((res) => setTimeout(res, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError ?? new Error("Failed to fetch");
+}
+
 export default function Chat() {
   const { settings, messages, sendMessage } = useChat();
   const [inputCode, setInputCode] = useState("");
@@ -128,11 +150,16 @@ export default function Chat() {
     appendApi(userMsg);
 
     try {
-      const resp = await fetch(apiUrl("/api/onay/qr-start"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ terminal: text }),
-      });
+      const resp = await fetchWithRetry(
+        "/api/onay/qr-start",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ terminal: text }),
+        },
+        3,
+        3000
+      );
 
       const body = await resp.json();
       if (!resp.ok || !body.success) {
