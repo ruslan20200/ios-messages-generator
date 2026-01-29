@@ -167,6 +167,19 @@ export default function Chat() {
       }
 
       const data = body.data || {};
+      const isEmptyPayload = !data.route && !data.plate;
+
+      if (isEmptyPayload) {
+        const errMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          text: "Ошибка. Услуга временно недоступна, попробуйте позже.",
+          isMe: false,
+          timestamp: new Date(),
+        };
+        appendApi(errMsg);
+        return;
+      }
+
       const route = data.route || "—";
       const plate = data.plate || "—";
       const price =
