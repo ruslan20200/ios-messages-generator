@@ -118,7 +118,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         number: settings.number,
         price,
         suffix: suffix,
-        link: `http://qr.tha.kz/${suffix}`
+        link: `/qr/${suffix}`
       }
     };
 

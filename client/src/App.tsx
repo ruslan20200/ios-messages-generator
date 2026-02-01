@@ -5,6 +5,7 @@ import Chat from "@/pages/Chat";
 import DesktopOnly from "@/pages/DesktopOnly";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/NotFound";
+import QrPage from "@/pages/QrPage";
 import { Route, Switch } from "wouter";
 
 function Router() {
@@ -12,6 +13,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/chat" component={Chat} />
+      <Route path="/qr/:code" component={QrPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -201,7 +201,7 @@ export default function Chat() {
           number: plate,
           price,
           suffix,
-          link: `http://qr.tha.kz/${suffix}`,
+          link: `/qr/${suffix}`,
         },
       };
       appendApi(systemMsg);
