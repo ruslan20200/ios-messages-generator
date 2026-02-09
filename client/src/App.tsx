@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { ChatProvider } from "@/contexts/ChatContext";
 import { useIsMobile } from "@/hooks/useMobile";
@@ -6,13 +7,25 @@ import DesktopOnly from "@/pages/DesktopOnly";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/NotFound";
 import QrPage from "@/pages/QrPage";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
+
+function RedirectToChat() {
+  const [, navigate] = useLocation();
+
+  // Send users straight into chat with api mode by default
+  useEffect(() => {
+    navigate("/chat?mode=api");
+  }, [navigate]);
+
+  return null;
+}
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={RedirectToChat} />
       <Route path="/chat" component={Chat} />
+      <Route path="/home" component={Home} />
       <Route path="/qr/:code" component={QrPage} />
       <Route component={NotFound} />
     </Switch>

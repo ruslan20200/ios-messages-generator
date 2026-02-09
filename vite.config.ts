@@ -5,8 +5,25 @@ import fs from "node:fs";
 import path from "path";
 import { defineConfig } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
+import { VitePWA } from "vite-plugin-pwa";
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime()];
+const plugins = [
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  vitePluginManusRuntime(),
+  VitePWA({
+    registerType: "autoUpdate",
+    filename: "service-worker.js",
+    includeAssets: ["favicon.ico", "apple-touch-icon.png", "robots.txt", "offline.html"],
+    workbox: {
+      globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,json,woff2}", "manifest.webmanifest"],
+      navigateFallback: "/index.html",
+      maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+    },
+    manifest: false,
+  }),
+];
 
 export default defineConfig({
   plugins,

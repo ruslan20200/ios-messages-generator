@@ -1,5 +1,6 @@
 import { ChevronLeft } from "lucide-react";
-import { Link } from "wouter";
+import { useCallback } from "react";
+import { Link, useLocation } from "wouter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface ChatHeaderProps {
@@ -9,10 +10,32 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({ title, subTitle, badge }: ChatHeaderProps) {
+  const [location, navigate] = useLocation();
+
+  const handleBack = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault();
+
+      // If user really has a previous page (not just our auto-redirect), try to go back
+      if (window.history.length > 2 && !location.startsWith("/chat")) {
+        window.history.back();
+        return;
+      }
+
+      // Otherwise, send them to home instead of bouncing back into the redirect loop
+      navigate("/home", { replace: true });
+    },
+    [location, navigate],
+  );
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 safe-area-top">
       <div className="h-[44px] flex items-center justify-between px-2 w-full max-w-md mx-auto">
-        <Link href="/" className="flex items-center active:opacity-50 transition-opacity ">
+        <Link
+          href="/"
+          onClick={handleBack}
+          className="flex items-center active:opacity-50 transition-opacity "
+        >
           <div className="w-13 h-13 rounded-full  flex items-center justify-center ios-blur border border-white/20 mt-10 ml-2 pr-1">
             <ChevronLeft size={37 } strokeWidth={3} className="text-white" />
           </div>
