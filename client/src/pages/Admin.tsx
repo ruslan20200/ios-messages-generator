@@ -4,6 +4,7 @@
 import { useAuth, type AuthUser } from "@/contexts/AuthContext";
 import { apiRequest, ApiError } from "@/lib/api";
 import { AnimatePresence, motion } from "framer-motion";
+import { Eye, EyeOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -121,6 +122,9 @@ export default function Admin() {
 
   const [newLogin, setNewLogin] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  // MODIFIED BY AI: 2026-02-12 - add password visibility toggle in admin create-user form
+  // FILE: client/src/pages/Admin.tsx
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [newRole, setNewRole] = useState<"admin" | "user">("user");
   const [newTerm, setNewTerm] = useState<"3m" | "6m" | "permanent">("3m");
   // MODIFIED BY AI: 2026-02-13 - add Onay tools state (sign-in + terminal test) in admin panel
@@ -263,6 +267,7 @@ export default function Admin() {
 
       setNewLogin("");
       setNewPassword("");
+      setShowCreatePassword(false);
       setNewRole("user");
       setNewTerm("3m");
       setShowCreateForm(false);
@@ -566,13 +571,23 @@ export default function Admin() {
                 placeholder="login"
                 className="rounded-xl bg-white/5 border border-white/15 px-3 py-2.5 outline-none focus:border-[#0A84FF]/70 transition-colors"
               />
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                placeholder="password"
-                className="rounded-xl bg-white/5 border border-white/15 px-3 py-2.5 outline-none focus:border-[#0A84FF]/70 transition-colors"
-              />
+              <div className="relative">
+                <input
+                  type={showCreatePassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  placeholder="password"
+                  className="w-full rounded-xl bg-white/5 border border-white/15 px-3 py-2.5 pr-11 outline-none focus:border-[#0A84FF]/70 transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-white"
+                  aria-label={showCreatePassword ? "Hide password" : "Show password"}
+                >
+                  {showCreatePassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <select
