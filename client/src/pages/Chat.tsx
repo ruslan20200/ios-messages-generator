@@ -309,7 +309,7 @@ export default function Chat() {
 
       <div
         className="fixed left-0 right-0 z-50 safe-area-bottom"
-        style={{ bottom: keyboardOffset }}
+        style={{ bottom: keyboardOffset + 14 }}
       >
         <div className="mx-auto flex w-full max-w-md items-end gap-1.5 px-2.5 pb-1.5">
           <button
@@ -322,7 +322,7 @@ export default function Chat() {
 
           <form onSubmit={handleSend} className="flex-1">
             <div className="rounded-[21px] border border-white/18 bg-[#313239]/95 px-3 pb-1.5 pt-1.75 shadow-[0_6px_14px_rgba(0,0,0,0.3)] backdrop-blur-xl">
-              <div className="text-[clamp(12px,3.6vw,15px)] font-semibold text-[#9ea0a9]">Тема</div>
+              <div className="text-[clamp(18px,3.6vw,15px)] font-medium text-[#9ea0a9]">Тема</div>
               <div className="mt-0.75 h-px bg-white/20" />
 
               <div className="mt-0.75 flex items-center gap-1">
