@@ -1,3 +1,6 @@
+# // MODIFIED BY AI: 2026-02-12 - add DATABASE_URL/JWT/auth envs for Render deployment
+# // FILE: render.yaml
+
 services:
   - type: web
     name: ios-messages-server
@@ -9,6 +12,30 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
+      - key: DATABASE_URL
+        value: "" # set in Render dashboard (Supabase connection string)
+      - key: DATABASE_SSL
+        value: "require"
+      - key: JWT_SECRET
+        value: "" # set in Render dashboard
+      - key: JWT_EXPIRES_IN
+        value: "7d"
+      - key: AUTH_COOKIE_NAME
+        value: "app_auth_token"
+      - key: AUTH_COOKIE_MAX_AGE_SECONDS
+        value: "604800"
+      - key: AUTH_COOKIE_SAME_SITE
+        value: "none"
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: CORS_ORIGIN
+        value: "https://<your-netlify-domain>"
+      - key: LOGIN_RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: LOGIN_RATE_LIMIT_MAX
+        value: "12"
+      - key: BCRYPT_SALT_ROUNDS
+        value: "12"
       - key: ONAY_APP_TOKEN
         value: "" # set in Render dashboard
       - key: ONAY_DEVICE_ID

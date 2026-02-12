@@ -1,12 +1,21 @@
+// MODIFIED BY AI: 2026-02-12 - localize Home page text to Russian with clearer action hints
+// FILE: client/src/pages/Home.tsx
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@/contexts/ChatContext";
-import { useState } from "react";
+import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
+
+const glassCardClass =
+  "rounded-3xl border border-white/12 bg-[#0f1016]/82 backdrop-blur-xl shadow-[0_12px_40px_rgba(2,10,22,0.45)]";
+
+const cardTransition = { duration: 0.3, ease: [0.22, 1, 0.36, 1] as const };
 
 async function fetchWithRetry(path: string, init: RequestInit, attempts = 3, delayMs = 3000) {
   let lastError: unknown;
@@ -43,7 +52,8 @@ export default function Home() {
     cost?: number | null;
     terminal?: string | null;
   } | null>(null);
-  const [_, setLocation] = useLocation();
+  const [isOnayPanelOpen, setIsOnayPanelOpen] = useState(false);
+  const [, setLocation] = useLocation();
 
   const formatCost = (cost?: number | null) => {
     if (typeof cost === "number") {
@@ -53,11 +63,15 @@ export default function Home() {
     return price || "120₸";
   };
 
+  const canOpenManualChat = useMemo(
+    () => route.trim().length > 0 && number.trim().length > 0,
+    [route, number],
+  );
+
   const goManualChat = () => {
-    if (route && number) {
-      updateSettings(route, number, price);
-      setLocation("/chat?mode=manual");
-    }
+    if (!canOpenManualChat) return;
+    updateSettings(route.trim(), number.trim().toUpperCase(), price);
+    setLocation("/chat?mode=manual");
   };
 
   const goApiChat = () => {
@@ -80,13 +94,13 @@ export default function Home() {
           body: JSON.stringify({ terminal: terminal.trim() }),
         },
         3,
-        3000
+        3000,
       );
 
       const body = await response.json();
 
       if (!response.ok || !body.success) {
-        const message = body?.message || `Ошибка Onay (${response.status})`;
+        const message = body?.message || `Onay request failed (${response.status})`;
         throw new Error(message);
       }
 
@@ -108,114 +122,166 @@ export default function Home() {
       updateSettings(nextRoute, nextPlate, nextPrice);
 
       toast.success("Данные обновлены", {
-        description: `${nextRoute}, ${nextPlate} • ${nextPrice}`,
+        description: `${nextRoute}, ${nextPlate} - ${nextPrice}`,
       });
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Не удалось получить данные";
-      toast.error("Onay запрос не удался", { description: message });
+        error instanceof Error ? error.message : "Не удалось получить данные терминала";
+      toast.error("Запрос Onay не удался", { description: message });
     } finally {
       setLoadingOnay(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 safe-area-top safe-area-bottom">
-      <div className="max-w-md mx-auto space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold">Сообщения</h1>
-          <p className="text-gray-500 text-sm">Выберите способ: через API или ручной.</p>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-[#04050a] text-white safe-area-top safe-area-bottom">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-16 top-[-10%] h-72 w-72 rounded-full bg-cyan-500/20 blur-3xl" />
+        <div className="absolute -right-20 bottom-[-15%] h-80 w-80 rounded-full bg-blue-600/25 blur-3xl" />
+      </div>
 
-        <div className="space-y-4">
-          <div className="bg-[#111112] border border-[#1f1f21] rounded-2xl p-4 flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="text-lg font-semibold">9909</div>
-              <div className="text-sm text-gray-400">Через API — запрос в реальный сервис</div>
+      <div className="relative mx-auto flex w-full max-w-md flex-col gap-4 px-4 py-6">
+        <motion.section
+          className={`${glassCardClass} p-4`}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={cardTransition}
+        >
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold tracking-tight">Сообщения</h1>
+            <p className="text-sm text-gray-400">Выберите режим: через API или вручную.</p>
+            <p className="text-xs text-gray-500">
+              Для API нажмите «Открыть», для ручного режима нажмите «В чат».
+            </p>
+          </div>
+        </motion.section>
+
+        <motion.section
+          className={`${glassCardClass} p-4`}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...cardTransition, delay: 0.04 }}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-base font-semibold">Чат через API</div>
+              <div className="text-sm text-gray-400">Нажмите «Открыть» для запроса в Onay</div>
             </div>
-            <Button onClick={goApiChat} className="h-10 px-4 text-sm font-semibold">Открыть</Button>
+            <Button
+              onClick={goApiChat}
+              className="h-10 rounded-xl bg-ios-blue px-4 text-sm font-semibold transition-all duration-200 active:scale-[0.98]"
+            >
+              Открыть
+            </Button>
+          </div>
+        </motion.section>
+
+        <motion.section
+          className={`${glassCardClass} space-y-4 p-4`}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...cardTransition, delay: 0.08 }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-base font-semibold">Ручной режим</div>
+              <div className="text-sm text-gray-400">Нажмите «В чат» для локальной генерации</div>
+            </div>
+            <Button
+              onClick={goManualChat}
+              disabled={!canOpenManualChat}
+              className="h-10 rounded-xl bg-white/10 px-4 text-sm font-semibold text-white transition-all duration-200 hover:bg-white/15 active:scale-[0.98]"
+            >
+              В чат
+            </Button>
           </div>
 
-          <div className="bg-[#111112] border border-[#1f1f21] rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-lg font-semibold">9909</div>
-                <div className="text-sm text-gray-400">Ручной режим (локально)</div>
-              </div>
-              <Button onClick={goManualChat} className="h-10 px-4 text-sm font-semibold">В чат</Button>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <label className="ml-1 text-sm text-gray-300">Маршрут</label>
+              <Input
+                value={route}
+                onChange={(e) => setRoute(e.target.value)}
+                placeholder="244"
+                className="h-12 rounded-2xl border border-white/12 bg-[#191c24]/80 text-white placeholder:text-gray-500 focus-visible:ring-0 focus-visible:border-white/25"
+              />
             </div>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-400 ml-1">Маршрут</label>
-                <Input
-                  value={route}
-                  onChange={(e) => setRoute(e.target.value)}
-                  placeholder="Например: 244"
-                  className="bg-[#1C1C1E] border-none text-white h-11 text-base rounded-xl placeholder:text-gray-600 focus-visible:ring-1 focus-visible:ring-ios-blue"
-                />
-              </div>
+            <div className="space-y-2">
+              <label className="ml-1 text-sm text-gray-300">Гос. номер</label>
+              <Input
+                value={number}
+                onChange={(e) => setNumber(e.target.value.toUpperCase())}
+                placeholder="521AV05"
+                className="h-12 rounded-2xl border border-white/12 bg-[#191c24]/80 text-white placeholder:text-gray-500 focus-visible:ring-0 focus-visible:border-white/25 uppercase"
+              />
+            </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-400 ml-1">Гос. номер</label>
-                <Input
-                  value={number}
-                  onChange={(e) => setNumber(e.target.value.toUpperCase())}
-                  placeholder="Например: 521AV05"
-                  className="bg-[#1C1C1E] border-none text-white h-11 text-base rounded-xl placeholder:text-gray-600 focus-visible:ring-1 focus-visible:ring-ios-blue uppercase"
-                />
+            <div className="space-y-2">
+              <label className="ml-1 text-sm text-gray-300">Цена</label>
+              <div className="flex h-12 items-center rounded-2xl border border-white/10 bg-[#151925]/70 px-4 text-base text-gray-200">
+                {price}
               </div>
+            </div>
+          </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-400 ml-1">Стоимость</label>
-                <div className="flex items-center px-4 h-11 bg-[#1C1C1E] rounded-xl text-gray-300 text-base">
-                  {price}
-                </div>
-              </div>
+          <div className="rounded-2xl border border-white/10 bg-[#12151f]/75 p-3">
+            <button
+              type="button"
+              onClick={() => setIsOnayPanelOpen((prev) => !prev)}
+              className="flex w-full items-center justify-between rounded-xl px-1 py-1 text-left text-sm font-medium text-gray-200"
+            >
+              <span>Подтянуть данные из Onay перед входом в чат</span>
+              <span className="text-xs text-gray-400">{isOnayPanelOpen ? "Скрыть" : "Показать"}</span>
+            </button>
 
-              <div className="rounded-xl bg-[#1C1C1E] p-3 space-y-2">
-                <p className="text-sm text-gray-400">Опционально: подтянуть из Onay перед ручным чатом</p>
+            {isOnayPanelOpen ? (
+              <div className="mt-3 space-y-2">
                 <div className="flex gap-2">
                   <Input
                     value={terminal}
                     onChange={(e) => setTerminal(e.target.value)}
                     placeholder="Код терминала"
-                    className="bg-[#141416] border-none text-white h-11 text-base rounded-xl placeholder:text-gray-600 focus-visible:ring-1 focus-visible:ring-ios-blue"
+                    className="h-11 rounded-xl border border-white/12 bg-[#171a23]/85 text-white placeholder:text-gray-500 focus-visible:ring-0 focus-visible:border-white/25"
                   />
                   <Button
                     type="button"
                     onClick={handleOnayFetch}
-                    className="h-11 px-4 text-sm font-semibold"
                     disabled={loadingOnay}
+                    className="h-11 rounded-xl bg-ios-blue px-4 text-sm font-semibold transition-all duration-200 active:scale-[0.98]"
                   >
-                    {loadingOnay ? "Запрос..." : "Получить"}
+                    {loadingOnay ? "Загрузка..." : "Получить"}
                   </Button>
                 </div>
-                {lastOnay && (
-                  <div className="text-sm text-gray-300 space-y-1 bg-[#141416] rounded-xl p-3">
-                    <div><span className="text-gray-500">Маршрут:</span> {lastOnay.route || "—"}</div>
-                    <div><span className="text-gray-500">Гос. номер:</span> {lastOnay.plate || "—"}</div>
-                    <div><span className="text-gray-500">Цена:</span> {formatCost(lastOnay.cost)}</div>
-                  </div>
-                )}
-              </div>
-            </div>
 
-            <Button 
+                {lastOnay ? (
+                  <div className="rounded-xl border border-white/8 bg-[#0f131c]/80 p-3 text-sm text-gray-300">
+                    <div>Маршрут: {lastOnay.route || "-"}</div>
+                    <div>Гос. номер: {lastOnay.plate || "-"}</div>
+                    <div>Цена: {formatCost(lastOnay.cost)}</div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <Button
               onClick={goManualChat}
-              className="w-full h-11 text-base font-semibold bg-ios-blue hover:bg-blue-600 text-white rounded-xl transition-colors"
+              disabled={!canOpenManualChat}
+              className="h-12 w-full rounded-2xl bg-ios-blue text-base font-semibold transition-all duration-200 active:scale-[0.99]"
             >
-              Перейти в чат (ручной)
+              Открыть ручной чат
             </Button>
 
-            <Button 
+            <Button
               onClick={clearHistory}
-              className="w-full h-11 text-base font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors"
+              className="h-11 w-full rounded-2xl border border-red-400/25 bg-red-500/15 text-sm font-semibold text-red-200 transition-all duration-200 hover:bg-red-500/20 active:scale-[0.99]"
             >
               Очистить историю
             </Button>
           </div>
-        </div>
+        </motion.section>
       </div>
     </div>
   );
