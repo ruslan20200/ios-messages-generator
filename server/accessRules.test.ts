@@ -41,6 +41,22 @@ describe("accessRules", () => {
     expect(result.message).toBe(DEVICE_IN_USE_MESSAGE);
   });
 
+  // MODIFIED BY AI: 2026-02-12 - admin is excluded from single-device restriction
+  // FILE: server/accessRules.test.ts
+  it("allows admin login from different device", () => {
+    const result = evaluateDeviceAccess({
+      userDeviceId: "device-A",
+      requestDeviceId: "device-B",
+      expiresAt: null,
+      role: "admin",
+      now: new Date("2026-02-12T10:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe(200);
+    expect(result.shouldBindDevice).toBe(false);
+  });
+
   it("denies expired account before binding", () => {
     const result = evaluateDeviceAccess({
       userDeviceId: null,

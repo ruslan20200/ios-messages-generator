@@ -390,3 +390,18 @@ paddingBottom: 144 + keyboardOffset,
 isSentCode ? "max-w-[66%] px-3 py-1.5" : "max-w-[74%] ..."
 className="flex-1 overflow-y-auto px-2.5 pt-[148px] ..."
 ```
+
+## 40) server/accessRules.ts + server/index.ts + server/accessRules.test.ts (admin multi-device login)
+- Description: Removed single-device restriction for `admin` while preserving expiry checks and keeping one-device enforcement for regular `user` accounts.
+- Date: 2026-02-12
+- Diff sample:
+```ts
+if (params.role === "admin") {
+  return { ok: true, shouldBindDevice: false, status: 200 };
+}
+```
+```ts
+if (session.role !== "admin" && session.device_id && session.device_id !== payload.deviceId) {
+  return res.status(403).json({ success: false, error: DEVICE_IN_USE_MESSAGE });
+}
+```

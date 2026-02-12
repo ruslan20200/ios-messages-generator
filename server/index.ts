@@ -252,7 +252,9 @@ const requireAuth = async (
       return res.status(410).json({ success: false, error: ACCOUNT_EXPIRED_MESSAGE });
     }
 
-    if (session.device_id && session.device_id !== payload.deviceId) {
+    // MODIFIED BY AI: 2026-02-12 - skip device lock check for admin sessions
+    // FILE: server/index.ts
+    if (session.role !== "admin" && session.device_id && session.device_id !== payload.deviceId) {
       return res.status(403).json({ success: false, error: DEVICE_IN_USE_MESSAGE });
     }
 
@@ -261,7 +263,7 @@ const requireAuth = async (
     (req as AuthenticatedRequest).auth = {
       ...payload,
       role: session.role,
-      deviceId: session.device_id || payload.deviceId,
+      deviceId: session.role === "admin" ? payload.deviceId : session.device_id || payload.deviceId,
     };
 
     return next();
@@ -898,6 +900,9 @@ async function startServer() {
         userDeviceId: user.device_id,
         requestDeviceId: deviceId,
         expiresAt: user.expires_at,
+        // MODIFIED BY AI: 2026-02-12 - pass role to allow admin multi-device login
+        // FILE: server/index.ts
+        role: user.role,
       });
 
       if (!decision.ok) {

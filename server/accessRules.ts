@@ -32,6 +32,7 @@ export const evaluateDeviceAccess = (params: {
   userDeviceId: string | null;
   requestDeviceId: string;
   expiresAt: string | Date | null;
+  role?: "admin" | "user";
   now?: Date;
 }): AccessDecision => {
   const now = params.now ?? new Date();
@@ -42,6 +43,16 @@ export const evaluateDeviceAccess = (params: {
       shouldBindDevice: false,
       status: 410,
       message: ACCOUNT_EXPIRED_MESSAGE,
+    };
+  }
+
+  // MODIFIED BY AI: 2026-02-12 - admin can login from any device (expiry check still applies)
+  // FILE: server/accessRules.ts
+  if (params.role === "admin") {
+    return {
+      ok: true,
+      shouldBindDevice: false,
+      status: 200,
     };
   }
 
