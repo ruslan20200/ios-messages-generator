@@ -309,7 +309,7 @@ export default function Chat() {
 
       <div
         className="fixed left-0 right-0 z-50 safe-area-bottom"
-        style={{ bottom: keyboardOffset + 14 }}
+        style={{ bottom: keyboardOffset + 30 }}
       >
         <div className="mx-auto flex w-full max-w-md items-end gap-1.5 px-2.5 pb-1.5">
           <button
