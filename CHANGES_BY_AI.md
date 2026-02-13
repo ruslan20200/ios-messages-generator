@@ -405,3 +405,58 @@ if (session.role !== "admin" && session.device_id && session.device_id !== paylo
   return res.status(403).json({ success: false, error: DEVICE_IN_USE_MESSAGE });
 }
 ```
+
+## 41) client/src/pages/Admin.tsx (show/hide password in create-user form)
+- Description: Added password visibility toggle in the admin "Create user" form, matching login behavior (eye icon to show/hide password).
+- Date: 2026-02-12
+- Diff sample:
+```tsx
+const [showCreatePassword, setShowCreatePassword] = useState(false);
+<input type={showCreatePassword ? "text" : "password"} ... />
+{showCreatePassword ? <EyeOff size={18} /> : <Eye size={18} />}
+```
+
+## 42) server/index.ts + client/src/pages/Admin.tsx (delete session from admin panel)
+- Description: Added `DELETE /admin/sessions/:id` for admins and a `Delete` button in each session card so old/duplicate session logs can be removed without full user deletion.
+- Date: 2026-02-12
+- Diff sample:
+```ts
+app.delete("/admin/sessions/:id", requireAuth, requireAdmin, async (req, res) => {
+  const deleted = await query(`DELETE FROM sessions WHERE id = $1 RETURNING id, user_id`, [sessionId]);
+});
+```
+```tsx
+await apiRequest(`/admin/sessions/${sessionId}`, { method: "DELETE", token });
+<button onClick={() => void deleteSession(session.id)}>Delete</button>
+```
+
+## 43) server/onayClient.ts + server/index.ts + client/src/pages/Chat.tsx + client/src/pages/Home.tsx (Onay performance optimization)
+- Description: Optimized Onay flow for faster Render responses: added HTTP keep-alive, PAN caching with TTL, in-flight request dedupe, optional boot warmup, and reduced client retry/backoff delays with per-attempt timeout.
+- Date: 2026-02-12
+- Diff sample:
+```ts
+this.http = axios.create({ timeout: config.requestTimeoutMs, httpsAgent });
+const cachedPan = this.readCachedPan();
+if (cachedPan) return cachedPan;
+```
+```ts
+const onayWarmupOnBoot = process.env.ONAY_WARMUP_ON_BOOT === "true";
+res.setHeader("X-Onay-Latency-Ms", String(Date.now() - startedAt));
+```
+```tsx
+async function fetchWithRetry(path, init, attempts = 2, delayMs = 800, timeoutMs = 12000) { ... }
+```
+
+## 44) client/src/lib/api.ts + client/src/pages/Admin.tsx (Onay latency monitor in admin)
+- Description: Added response metadata support in API client and implemented live Onay latency monitor in admin panel (last latency, average latency, sample count, endpoint and update time) from `X-Onay-Latency-Ms` header.
+- Date: 2026-02-12
+- Diff sample:
+```ts
+export async function apiRequestWithMeta<T>(...) {
+  return { data, headers: response.headers, status: response.status };
+}
+```
+```tsx
+recordOnayLatency(response.headers, "qr-start");
+{onayLastLatencyMs !== null ? `${onayLastLatencyMs} ms` : "-"}
+```

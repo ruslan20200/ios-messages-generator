@@ -8,16 +8,24 @@ const apiUrl = (path: string) => `${API_BASE}${path}`;
 export class ApiError extends Error {
   status: number;
   payload: unknown;
+  headers: Headers;
 
-  constructor(status: number, message: string, payload: unknown) {
+  constructor(status: number, message: string, payload: unknown, headers?: Headers) {
     super(message);
     this.status = status;
     this.payload = payload;
+    this.headers = headers || new Headers();
   }
 }
 
 type ApiOptions = RequestInit & {
   token?: string | null;
+};
+
+export type ApiResponseWithMeta<T> = {
+  data: T;
+  headers: Headers;
+  status: number;
 };
 
 const parseResponseBody = async (response: Response) => {
@@ -33,7 +41,12 @@ const parseResponseBody = async (response: Response) => {
   }
 };
 
-export async function apiRequest<T = any>(path: string, options: ApiOptions = {}) {
+// MODIFIED BY AI: 2026-02-12 - expose response headers/status to read server latency metrics in admin tools
+// FILE: client/src/lib/api.ts
+export async function apiRequestWithMeta<T = any>(
+  path: string,
+  options: ApiOptions = {},
+): Promise<ApiResponseWithMeta<T>> {
   const headers = new Headers(options.headers || {});
 
   if (options.body && !headers.has("Content-Type")) {
@@ -58,8 +71,17 @@ export async function apiRequest<T = any>(path: string, options: ApiOptions = {}
         ? String((payload as { error?: unknown }).error || "")
         : "") || `Request failed with status ${response.status}`;
 
-    throw new ApiError(response.status, message, payload);
+    throw new ApiError(response.status, message, payload, response.headers);
   }
 
-  return payload as T;
+  return {
+    data: payload as T,
+    headers: response.headers,
+    status: response.status,
+  };
+}
+
+export async function apiRequest<T = any>(path: string, options: ApiOptions = {}) {
+  const response = await apiRequestWithMeta<T>(path, options);
+  return response.data;
 }

@@ -1,9 +1,18 @@
-import axios, { AxiosError, AxiosInstance } from "axios";
+// MODIFIED BY AI: 2026-02-12 - optimize Onay client with keep-alive, PAN cache and in-flight request dedupe
+// FILE: server/onayClient.ts
+
+import axios, { AxiosInstance } from "axios";
+import https from "https";
 
 type TokenBundle = {
   token: string;
   shortToken: string;
   deviceId: string;
+};
+
+type PanCacheEntry = {
+  value: string;
+  expiresAt: number;
 };
 
 export type OnayConfig = {
@@ -18,6 +27,8 @@ export type OnayConfig = {
   pushToken: string;
   cityId: string;
   verbose: boolean;
+  requestTimeoutMs: number;
+  panCacheTtlMs: number;
 };
 
 export type OnayTrip = {
@@ -31,6 +42,13 @@ export type OnayTrip = {
 };
 
 const defaultBaseUrl = "https://nwqsr0rz5earuiy2t8z8.tha.kz";
+const defaultRequestTimeoutMs = 12000;
+const defaultPanCacheTtlMs = 30 * 60 * 1000;
+
+const parsePositiveInt = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+};
 
 const isAuthError = (error: unknown) => {
   if (!axios.isAxiosError(error)) return false;
@@ -70,17 +88,36 @@ export function loadOnayConfig(): OnayConfig {
     pushToken: required("ONAY_PUSH_TOKEN"),
     cityId: process.env.ONAY_CITY_ID || "1",
     verbose: process.env.ONAY_VERBOSE_LOGS === "true",
+    requestTimeoutMs: parsePositiveInt(
+      process.env.ONAY_TIMEOUT_MS,
+      defaultRequestTimeoutMs,
+    ),
+    panCacheTtlMs: parsePositiveInt(
+      process.env.ONAY_PAN_CACHE_TTL_MS,
+      defaultPanCacheTtlMs,
+    ),
   };
 }
 
 export class OnayClient {
   private http: AxiosInstance;
   private tokens?: TokenBundle;
+  private signInPromise?: Promise<TokenBundle>;
+  private panPromise?: Promise<string>;
+  private panCache?: PanCacheEntry;
+  private qrStartInFlight = new Map<string, Promise<OnayTrip>>();
 
   constructor(private config: OnayConfig) {
+    const httpsAgent = new https.Agent({
+      keepAlive: true,
+      maxSockets: 32,
+      keepAliveMsecs: 30_000,
+    });
+
     this.http = axios.create({
       baseURL: config.baseUrl,
-      timeout: 15000,
+      timeout: config.requestTimeoutMs,
+      httpsAgent,
       headers: {
         "x-ma-os": config.os,
         "x-ma-version": config.version,
@@ -100,52 +137,64 @@ export class OnayClient {
 
   async signIn(force = false) {
     if (this.tokens && !force) return this.tokens;
+    if (this.signInPromise) return this.signInPromise;
 
-    const appTokenHeader = this.config.appToken.startsWith("Bearer ")
-      ? this.config.appToken
-      : `Bearer ${this.config.appToken}`;
+    const signInTask = (async () => {
+      const appTokenHeader = this.config.appToken.startsWith("Bearer ")
+        ? this.config.appToken
+        : `Bearer ${this.config.appToken}`;
 
-    const headers = {
-      "content-type": "application/json",
-      "x-application-token": appTokenHeader,
-      "x-ma-d": this.config.deviceId,
-      "x-ma-os": this.config.os,
-      "x-ma-version": this.config.version,
-      "user-agent": this.config.userAgent,
-    };
+      const headers = {
+        "content-type": "application/json",
+        "x-application-token": appTokenHeader,
+        "x-ma-d": this.config.deviceId,
+        "x-ma-os": this.config.os,
+        "x-ma-version": this.config.version,
+        "user-agent": this.config.userAgent,
+      };
 
-    const payload = {
-      phoneNumber: this.config.phoneNumber,
-      password: this.config.password,
-      deviceOs: Number(this.config.os) || 2,
-      pushToken: this.config.pushToken,
-    };
+      const payload = {
+        phoneNumber: this.config.phoneNumber,
+        password: this.config.password,
+        deviceOs: Number(this.config.os) || 2,
+        pushToken: this.config.pushToken,
+      };
 
-    this.log("sign-in request", {
-      phone: mask(this.config.phoneNumber),
-      device: mask(this.config.deviceId),
-    });
+      this.log("sign-in request", {
+        phone: mask(this.config.phoneNumber),
+        device: mask(this.config.deviceId),
+      });
 
-    const { data } = await this.http.put(
-      "/v1/external/user/sign-in",
-      payload,
-      { headers },
-    );
+      const { data } = await this.http.put(
+        "/v1/external/user/sign-in",
+        payload,
+        { headers },
+      );
 
-    const tokenData = data?.result?.data;
+      const tokenData = data?.result?.data;
 
-    if (!tokenData?.token || !tokenData?.shortToken) {
-      throw new Error("Onay sign-in: token is missing in response");
+      if (!tokenData?.token || !tokenData?.shortToken) {
+        throw new Error("Onay sign-in: token is missing in response");
+      }
+
+      this.tokens = {
+        token: tokenData.token,
+        shortToken: tokenData.shortToken,
+        deviceId: tokenData.d || this.config.deviceId,
+      };
+
+      this.log("sign-in success", { device: mask(this.tokens.deviceId) });
+      return this.tokens;
+    })();
+
+    this.signInPromise = signInTask;
+    try {
+      return await signInTask;
+    } finally {
+      if (this.signInPromise === signInTask) {
+        this.signInPromise = undefined;
+      }
     }
-
-    this.tokens = {
-      token: tokenData.token,
-      shortToken: tokenData.shortToken,
-      deviceId: tokenData.d || this.config.deviceId,
-    };
-
-    this.log("sign-in success", { device: mask(this.tokens.deviceId) });
-    return this.tokens;
   }
 
   private requireToken() {
@@ -162,9 +211,23 @@ export class OnayClient {
     };
   }
 
-  private async getFirstPan(): Promise<string> {
-    await this.signIn();
+  private readCachedPan() {
+    if (!this.panCache) return null;
+    if (this.panCache.expiresAt <= Date.now()) {
+      this.panCache = undefined;
+      return null;
+    }
+    return this.panCache.value;
+  }
 
+  private setCachedPan(value: string) {
+    this.panCache = {
+      value,
+      expiresAt: Date.now() + this.config.panCacheTtlMs,
+    };
+  }
+
+  private async fetchFirstPanFromApi(): Promise<string> {
     const headers = this.requireToken();
     const url = `/v2/external/customer/cards?cityId=${this.config.cityId}`;
     const { data } = await this.http.get(url, { headers });
@@ -183,8 +246,41 @@ export class OnayClient {
       throw new Error("Onay: first card has no PAN");
     }
 
-    this.log("pan retrieved", { pan: mask(String(pan)) });
-    return pan;
+    const normalizedPan = String(pan);
+    this.setCachedPan(normalizedPan);
+    this.log("pan retrieved", { pan: mask(normalizedPan) });
+    return normalizedPan;
+  }
+
+  private async getFirstPan(forceRefresh = false): Promise<string> {
+    if (!forceRefresh) {
+      const cachedPan = this.readCachedPan();
+      if (cachedPan) return cachedPan;
+      if (this.panPromise) return this.panPromise;
+    }
+
+    const panTask = (async () => {
+      await this.signIn(forceRefresh);
+      try {
+        return await this.fetchFirstPanFromApi();
+      } catch (error) {
+        if (isAuthError(error)) {
+          this.log("cards auth failed, retrying sign-in");
+          await this.signIn(true);
+          return this.fetchFirstPanFromApi();
+        }
+        throw error;
+      }
+    })();
+
+    this.panPromise = panTask;
+    try {
+      return await panTask;
+    } finally {
+      if (this.panPromise === panTask) {
+        this.panPromise = undefined;
+      }
+    }
   }
 
   private normalizeTrip(data: any, pan?: string): OnayTrip {
@@ -201,43 +297,72 @@ export class OnayClient {
   }
 
   async qrStart(terminal: string): Promise<OnayTrip> {
-    if (!terminal.trim()) {
+    const normalizedTerminal = terminal.trim();
+    if (!normalizedTerminal) {
       throw new Error("Terminal code is required");
     }
 
-    const pan = await this.getFirstPan();
-
-    const attempt = async (forced: boolean) => {
-      if (forced) await this.signIn(true);
-      const headers = this.requireToken();
-      const payload = { terminal: terminal.trim(), pan };
-      this.log("qr-start request", { terminal: terminal.trim() });
-      const { data } = await this.http.put(
-        "/v1/external/customer/card/acquiring/qr/start",
-        payload,
-        { headers },
-      );
-      this.log("qr-start success");
-      return this.normalizeTrip(data, pan);
-    };
-
-    try {
-      return await attempt(false);
-    } catch (error) {
-      if (isAuthError(error)) {
-        this.log("auth failed, retrying sign-in");
-        return attempt(true);
-      }
-
-      if (axios.isAxiosError(error)) {
-        const details = {
-          status: error.response?.status,
-          data: error.response?.data,
-        };
-        this.log("qr-start failed", details);
-      }
-
-      throw error;
+    const inFlight = this.qrStartInFlight.get(normalizedTerminal);
+    if (inFlight) {
+      this.log("qr-start dedupe hit", { terminal: normalizedTerminal });
+      return inFlight;
     }
+
+    const task = (async () => {
+      let pan = await this.getFirstPan();
+
+      const attempt = async (forced: boolean) => {
+        if (forced) {
+          await this.signIn(true);
+          pan = await this.getFirstPan(true);
+        }
+
+        const headers = this.requireToken();
+        const payload = { terminal: normalizedTerminal, pan };
+        this.log("qr-start request", { terminal: normalizedTerminal });
+        const { data } = await this.http.put(
+          "/v1/external/customer/card/acquiring/qr/start",
+          payload,
+          { headers },
+        );
+        this.log("qr-start success");
+        return this.normalizeTrip(data, pan);
+      };
+
+      try {
+        return await attempt(false);
+      } catch (error) {
+        if (isAuthError(error)) {
+          this.log("auth failed, retrying sign-in");
+          return attempt(true);
+        }
+
+        if (axios.isAxiosError(error)) {
+          const details = {
+            status: error.response?.status,
+            data: error.response?.data,
+          };
+          this.log("qr-start failed", details);
+        }
+
+        throw error;
+      }
+    })();
+
+    this.qrStartInFlight.set(normalizedTerminal, task);
+    try {
+      return await task;
+    } finally {
+      if (this.qrStartInFlight.get(normalizedTerminal) === task) {
+        this.qrStartInFlight.delete(normalizedTerminal);
+      }
+    }
+  }
+
+  // MODIFIED BY AI: 2026-02-12 - optional preloading to cut first-request latency after startup
+  // FILE: server/onayClient.ts
+  async warmup() {
+    await this.signIn();
+    await this.getFirstPan();
   }
 }

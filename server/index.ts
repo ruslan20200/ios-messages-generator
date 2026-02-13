@@ -38,6 +38,34 @@ const getOnayClient = () => {
   return onayClient;
 };
 
+const onayWarmupOnBoot = process.env.ONAY_WARMUP_ON_BOOT === "true";
+
+// MODIFIED BY AI: 2026-02-12 - optional non-blocking Onay warmup to reduce first request latency
+// FILE: server/index.ts
+const warmupOnayClient = () => {
+  if (!onayWarmupOnBoot) return;
+
+  setTimeout(() => {
+    try {
+      const client = getOnayClient();
+      void client
+        .warmup()
+        .then(() => {
+          console.log("[onay] warmup completed");
+        })
+        .catch((error) => {
+          const message =
+            error instanceof Error ? error.message : "unknown warmup error";
+          console.warn("[onay] warmup failed", message);
+        });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "unknown warmup error";
+      console.warn("[onay] warmup init failed", message);
+    }
+  }, 250);
+};
+
 type UserRow = {
   id: number;
   login: string;
@@ -810,6 +838,26 @@ async function startServer() {
           },
         },
       },
+      "/admin/sessions/{id}": {
+        delete: {
+          tags: ["Admin"],
+          summary: "Delete a session log",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "integer" },
+            },
+          ],
+          responses: {
+            200: { description: "Session deleted" },
+            400: { description: "Invalid session id or current session" },
+            404: { description: "Session not found" },
+          },
+        },
+      },
       "/admin/cleanup-expired": {
         post: {
           tags: ["Admin"],
@@ -1305,6 +1353,52 @@ async function startServer() {
     }
   });
 
+  // MODIFIED BY AI: 2026-02-12 - add admin endpoint to delete noisy session logs directly from panel
+  // FILE: server/index.ts
+  app.delete("/admin/sessions/:id", requireAuth, requireAdmin, async (req, res) => {
+    const sessionId = parseUserId(req.params.id);
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: "Invalid session id" });
+    }
+
+    const auth = (req as AuthenticatedRequest).auth;
+    if (auth && auth.sessionId === sessionId) {
+      return res.status(400).json({
+        success: false,
+        error: "Current session cannot be deleted",
+      });
+    }
+
+    try {
+      const deleted = await query<{ id: number; user_id: number }>(
+        `DELETE FROM sessions
+         WHERE id = $1
+         RETURNING id, user_id`,
+        [sessionId],
+      );
+
+      if (deleted.rowCount === 0) {
+        return res.status(404).json({ success: false, error: "Session not found" });
+      }
+
+      if (auth) {
+        await logAdminAction({
+          adminUserId: auth.userId,
+          action: "delete_session",
+          targetUserId: deleted.rows[0].user_id,
+          notes: `session_id=${sessionId}`,
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: { sessionId },
+      });
+    } catch (error) {
+      return res.status(500).json({ success: false, error: "Failed to delete session" });
+    }
+  });
+
   app.post("/admin/cleanup-expired", requireAuth, requireAdmin, async (req, res) => {
     const rawMode = String(req.body?.mode || "deactivate").toLowerCase();
     const mode: CleanupMode = rawMode === "delete" ? "delete" : "deactivate";
@@ -1329,6 +1423,7 @@ async function startServer() {
 
   app.post("/api/onay/qr-start", async (req, res) => {
     const terminal = String(req.body?.terminal || "").trim();
+    const startedAt = Date.now();
 
     if (!terminal) {
       return res
@@ -1346,6 +1441,7 @@ async function startServer() {
     try {
       const client = getOnayClient();
       const trip = await client.qrStart(terminal);
+      res.setHeader("X-Onay-Latency-Ms", String(Date.now() - startedAt));
 
       return res.json({
         success: true,
@@ -1362,6 +1458,7 @@ async function startServer() {
       const message =
         error instanceof Error ? error.message : "Unexpected Onay error";
       console.error("/api/onay/qr-start failed", message);
+      res.setHeader("X-Onay-Latency-Ms", String(Date.now() - startedAt));
       return res.status(status).json({ success: false, message });
     }
   });
@@ -1402,6 +1499,8 @@ async function startServer() {
   });
 
   const port = process.env.PORT || 3000;
+
+  warmupOnayClient();
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

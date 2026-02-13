@@ -34,8 +34,29 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 const STORAGE_KEY_SETTINGS = "ios_msg_settings";
 const STORAGE_KEY_MESSAGES = "ios_msg_history";
+const SESSION_STORAGE_KEY_MESSAGES = "ios_msg_history_session";
 // API чат хранится отдельно, чистим вместе с ручным
 const STORAGE_KEY_MESSAGES_API = "ios_msg_history_api";
+const MAX_PERSISTED_MESSAGES = 140;
+const STORAGE_WRITE_DEBOUNCE_MS = 180;
+
+const restoreManualMessages = (): Message[] => {
+  const sessionSaved = sessionStorage.getItem(SESSION_STORAGE_KEY_MESSAGES);
+  const localSaved = localStorage.getItem(STORAGE_KEY_MESSAGES);
+  const saved = sessionSaved || localSaved;
+  if (!saved) return [];
+
+  try {
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.slice(-MAX_PERSISTED_MESSAGES).map((m: any) => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+    }));
+  } catch {
+    return [];
+  }
+};
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const defaultSettings: ChatSettings = { route: "", number: "", price: "120₸" };
@@ -53,24 +74,26 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return defaultSettings;
   });
 
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_MESSAGES);
-    if (saved) {
-      // Restore Date objects from strings
-      return JSON.parse(saved).map((m: any) => ({
-        ...m,
-        timestamp: new Date(m.timestamp),
-      }));
-    }
-    return [];
-  });
+  const [messages, setMessages] = useState<Message[]>(restoreManualMessages);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages));
+    const trimmedMessages = messages.slice(-MAX_PERSISTED_MESSAGES);
+    sessionStorage.setItem(SESSION_STORAGE_KEY_MESSAGES, JSON.stringify(trimmedMessages));
+
+    const timer = window.setTimeout(() => {
+      localStorage.setItem(
+        STORAGE_KEY_MESSAGES,
+        JSON.stringify(trimmedMessages),
+      );
+    }, STORAGE_WRITE_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [messages]);
 
   const updateSettings = (route: string, number: string, price?: string) => {
@@ -122,12 +145,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    setMessages((prev) => [...prev, userMsg, systemMsg]);
+    setMessages((prev) => {
+      const next = [...prev, userMsg, systemMsg];
+      return next.length > MAX_PERSISTED_MESSAGES
+        ? next.slice(-MAX_PERSISTED_MESSAGES)
+        : next;
+    });
   };
 
   const clearHistory = () => {
     localStorage.removeItem(STORAGE_KEY_MESSAGES);
     localStorage.removeItem(STORAGE_KEY_MESSAGES_API);
+    sessionStorage.removeItem(SESSION_STORAGE_KEY_MESSAGES);
+    sessionStorage.removeItem("ios_msg_history_api_session");
     setMessages([]);
   };
 

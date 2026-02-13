@@ -17,11 +17,21 @@ const glassCardClass =
 
 const cardTransition = { duration: 0.3, ease: [0.22, 1, 0.36, 1] as const };
 
-async function fetchWithRetry(path: string, init: RequestInit, attempts = 3, delayMs = 3000) {
+// MODIFIED BY AI: 2026-02-12 - reduce Onay retry delay and add timeout to avoid long waits
+// FILE: client/src/pages/Home.tsx
+async function fetchWithRetry(
+  path: string,
+  init: RequestInit,
+  attempts = 2,
+  delayMs = 800,
+  timeoutMs = 12000,
+) {
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
+    const controller = new AbortController();
+    const timeoutHandle = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const resp = await fetch(apiUrl(path), init);
+      const resp = await fetch(apiUrl(path), { ...init, signal: controller.signal });
       if (resp.status >= 500 && i < attempts - 1) {
         await new Promise((res) => setTimeout(res, delayMs));
         continue;
@@ -34,6 +44,8 @@ async function fetchWithRetry(path: string, init: RequestInit, attempts = 3, del
         continue;
       }
       throw err;
+    } finally {
+      window.clearTimeout(timeoutHandle);
     }
   }
   throw lastError ?? new Error("Failed to fetch");
@@ -93,8 +105,9 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ terminal: terminal.trim() }),
         },
-        3,
-        3000,
+        2,
+        800,
+        12000,
       );
 
       const body = await response.json();

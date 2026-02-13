@@ -8,16 +8,47 @@ import { ArrowUp, Mic, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 const API_STORAGE_KEY = "ios_msg_history_api";
+const API_SESSION_STORAGE_KEY = "ios_msg_history_api_session";
 const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 const KEYBOARD_OPEN_THRESHOLD = 72;
 const TERMINAL_DIGITS_PATTERN = /^\d+$/;
+const MAX_PERSISTED_API_MESSAGES = 140;
+const STORAGE_WRITE_DEBOUNCE_MS = 180;
 
-async function fetchWithRetry(path: string, init: RequestInit, attempts = 3, delayMs = 3000) {
+const restoreApiMessages = (): ChatMessage[] => {
+  const sessionSaved = sessionStorage.getItem(API_SESSION_STORAGE_KEY);
+  const localSaved = localStorage.getItem(API_STORAGE_KEY);
+  const saved = sessionSaved || localSaved;
+  if (!saved) return [];
+
+  try {
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.slice(-MAX_PERSISTED_API_MESSAGES).map((m: any) => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+    }));
+  } catch {
+    return [];
+  }
+};
+
+// MODIFIED BY AI: 2026-02-12 - reduce long retry waits and add per-attempt timeout for Onay requests
+// FILE: client/src/pages/Chat.tsx
+async function fetchWithRetry(
+  path: string,
+  init: RequestInit,
+  attempts = 2,
+  delayMs = 800,
+  timeoutMs = 12000,
+) {
   let lastError: unknown;
   for (let i = 0; i < attempts; i++) {
+    const controller = new AbortController();
+    const timeoutHandle = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const resp = await fetch(apiUrl(path), init);
+      const resp = await fetch(apiUrl(path), { ...init, signal: controller.signal });
       if (resp.status >= 500 && i < attempts - 1) {
         await new Promise((res) => setTimeout(res, delayMs));
         continue;
@@ -30,6 +61,8 @@ async function fetchWithRetry(path: string, init: RequestInit, attempts = 3, del
         continue;
       }
       throw err;
+    } finally {
+      window.clearTimeout(timeoutHandle);
     }
   }
   throw lastError ?? new Error("Failed to fetch");
@@ -38,21 +71,11 @@ async function fetchWithRetry(path: string, init: RequestInit, attempts = 3, del
 export default function Chat() {
   const { settings, messages, sendMessage } = useChat();
   const [inputCode, setInputCode] = useState("");
-  const [apiMessages, setApiMessages] = useState<ChatMessage[]>(() => {
-    const saved = localStorage.getItem(API_STORAGE_KEY);
-    if (!saved) return [];
-    try {
-      return JSON.parse(saved).map((m: any) => ({
-        ...m,
-        timestamp: new Date(m.timestamp),
-      }));
-    } catch {
-      return [];
-    }
-  });
+  const [apiMessages, setApiMessages] = useState<ChatMessage[]>(restoreApiMessages);
   // MODIFIED BY AI: 2026-02-12 - keep composer visible above mobile keyboard while preserving old visual style
   // FILE: client/src/pages/Chat.tsx
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -123,7 +146,16 @@ export default function Chat() {
 
   useEffect(() => {
     if (mode !== "api") return;
-    localStorage.setItem(API_STORAGE_KEY, JSON.stringify(apiMessages));
+    const trimmedMessages = apiMessages.slice(-MAX_PERSISTED_API_MESSAGES);
+    sessionStorage.setItem(API_SESSION_STORAGE_KEY, JSON.stringify(trimmedMessages));
+
+    const timer = window.setTimeout(() => {
+      localStorage.setItem(API_STORAGE_KEY, JSON.stringify(trimmedMessages));
+    }, STORAGE_WRITE_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [apiMessages, mode]);
 
   useEffect(() => {
@@ -131,6 +163,11 @@ export default function Chat() {
     if (!viewport) return;
 
     const syncKeyboardOffset = () => {
+      if (!isInputFocused) {
+        setKeyboardOffset(0);
+        return;
+      }
+
       const rawOffset = window.innerHeight - viewport.height - viewport.offsetTop;
       const nextOffset = rawOffset > KEYBOARD_OPEN_THRESHOLD ? Math.round(rawOffset) : 0;
       setKeyboardOffset(nextOffset);
@@ -138,19 +175,19 @@ export default function Chat() {
 
     syncKeyboardOffset();
     viewport.addEventListener("resize", syncKeyboardOffset);
-    viewport.addEventListener("scroll", syncKeyboardOffset);
     window.addEventListener("orientationchange", syncKeyboardOffset);
-    window.addEventListener("focusin", syncKeyboardOffset);
-    window.addEventListener("focusout", syncKeyboardOffset);
 
     return () => {
       viewport.removeEventListener("resize", syncKeyboardOffset);
-      viewport.removeEventListener("scroll", syncKeyboardOffset);
       window.removeEventListener("orientationchange", syncKeyboardOffset);
-      window.removeEventListener("focusin", syncKeyboardOffset);
-      window.removeEventListener("focusout", syncKeyboardOffset);
     };
-  }, []);
+  }, [isInputFocused]);
+
+  useEffect(() => {
+    if (!isInputFocused) {
+      setKeyboardOffset(0);
+    }
+  }, [isInputFocused]);
 
   useEffect(() => {
     if (keyboardOffset > 0) {
@@ -159,7 +196,12 @@ export default function Chat() {
   }, [keyboardOffset]);
 
   const appendApi = (msg: ChatMessage) => {
-    setApiMessages((prev) => [...prev, msg]);
+    setApiMessages((prev) => {
+      const next = [...prev, msg];
+      return next.length > MAX_PERSISTED_API_MESSAGES
+        ? next.slice(-MAX_PERSISTED_API_MESSAGES)
+        : next;
+    });
   };
 
   const handleSend = async (event?: React.FormEvent) => {
@@ -210,8 +252,9 @@ export default function Chat() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ terminal: text }),
         },
-        3,
-        3000,
+        2,
+        800,
+        12000,
       );
 
       const body = await resp.json();
@@ -337,10 +380,12 @@ export default function Chat() {
                   inputMode={mode === "api" ? "numeric" : "text"}
                   pattern={mode === "api" ? "[0-9]*" : undefined}
                   onFocus={() => {
+                    setIsInputFocused(true);
                     setTimeout(() => {
                       scrollToBottom("auto");
                     }, 80);
                   }}
+                  onBlur={() => setIsInputFocused(false)}
                   placeholder={mode === "api" ? "Текстовое сообщение • SMS" : "Текстовое сообщение • iMessage"}
                   className="h-[30px] flex-1 bg-transparent text-[clamp(12px,3.8vw,15px)] font-medium text-white placeholder:text-[clamp(12px,3.8vw,15px)] placeholder:text-[#8f9199] focus:outline-none"
                 />

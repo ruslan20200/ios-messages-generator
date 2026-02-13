@@ -2,7 +2,7 @@
 // FILE: client/src/pages/Admin.tsx
 
 import { useAuth, type AuthUser } from "@/contexts/AuthContext";
-import { apiRequest, ApiError } from "@/lib/api";
+import { apiRequest, apiRequestWithMeta, ApiError } from "@/lib/api";
 import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -57,6 +57,8 @@ type OnayQrStartResponse = {
   };
   message?: string;
 };
+
+type OnayLatencyEndpoint = "sign-in" | "qr-start";
 
 const formatDate = (value: string | null) => {
   if (!value) return "Permanent";
@@ -134,6 +136,13 @@ export default function Admin() {
   const [onayError, setOnayError] = useState("");
   const [onayTokens, setOnayTokens] = useState<OnaySignInResponse["data"] | null>(null);
   const [onayTrip, setOnayTrip] = useState<OnayQrStartResponse["data"] | null>(null);
+  // MODIFIED BY AI: 2026-02-12 - track server latency header for Onay requests (last + average)
+  // FILE: client/src/pages/Admin.tsx
+  const [onayLastLatencyMs, setOnayLastLatencyMs] = useState<number | null>(null);
+  const [onayLatencySamples, setOnayLatencySamples] = useState<number[]>([]);
+  const [onayLatencyUpdatedAt, setOnayLatencyUpdatedAt] = useState<Date | null>(null);
+  const [onayLastLatencyEndpoint, setOnayLastLatencyEndpoint] =
+    useState<OnayLatencyEndpoint | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -308,6 +317,31 @@ export default function Admin() {
     });
   };
 
+  // MODIFIED BY AI: 2026-02-12 - allow deleting single session log from admin sessions block
+  // FILE: client/src/pages/Admin.tsx
+  const deleteSession = async (sessionId: number) => {
+    if (!window.confirm("Delete this session log?")) return;
+
+    setIsBusy(true);
+    setError("");
+
+    try {
+      await apiRequest(`/admin/sessions/${sessionId}`, {
+        method: "DELETE",
+        token,
+      });
+      await refreshSessions();
+    } catch (apiError) {
+      if (apiError instanceof ApiError) {
+        setError(apiError.message);
+      } else {
+        setError("Failed to delete session");
+      }
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const cleanupExpired = async (mode: "deactivate" | "delete") => {
     const confirmed =
       mode === "delete"
@@ -330,7 +364,10 @@ export default function Admin() {
     navigate("/login", { replace: true });
   };
 
-  const runOnayAction = async (action: () => Promise<void>) => {
+  const runOnayAction = async (
+    endpoint: OnayLatencyEndpoint,
+    action: () => Promise<void>,
+  ) => {
     setOnayBusy(true);
     setOnayError("");
 
@@ -338,6 +375,7 @@ export default function Admin() {
       await action();
     } catch (apiError) {
       if (apiError instanceof ApiError) {
+        recordOnayLatency(apiError.headers, endpoint);
         setOnayError(apiError.message);
       } else if (apiError instanceof Error) {
         setOnayError(apiError.message);
@@ -349,18 +387,42 @@ export default function Admin() {
     }
   };
 
+  const recordOnayLatency = (
+    headers: Headers | null | undefined,
+    endpoint: OnayLatencyEndpoint,
+  ) => {
+    if (!headers) return;
+    const rawLatency = headers.get("x-onay-latency-ms");
+    if (!rawLatency) return;
+
+    const latencyMs = Number.parseInt(rawLatency, 10);
+    if (!Number.isFinite(latencyMs) || latencyMs < 0) return;
+
+    setOnayLastLatencyMs(latencyMs);
+    setOnayLatencyUpdatedAt(new Date());
+    setOnayLastLatencyEndpoint(endpoint);
+    setOnayLatencySamples((prev) => [...prev.slice(-19), latencyMs]);
+  };
+
+  const onayAvgLatencyMs = useMemo(() => {
+    if (onayLatencySamples.length === 0) return null;
+    const total = onayLatencySamples.reduce((acc, value) => acc + value, 0);
+    return Math.round(total / onayLatencySamples.length);
+  }, [onayLatencySamples]);
+
   const handleOnaySignIn = async () => {
-    await runOnayAction(async () => {
-      const response = await apiRequest<OnaySignInResponse>("/api/onay/sign-in", {
+    await runOnayAction("sign-in", async () => {
+      const response = await apiRequestWithMeta<OnaySignInResponse>("/api/onay/sign-in", {
         method: "POST",
         token,
       });
+      recordOnayLatency(response.headers, "sign-in");
 
-      if (!response.success || !response.data) {
-        throw new Error(response.message || "Onay sign-in failed");
+      if (!response.data.success || !response.data.data) {
+        throw new Error(response.data.message || "Onay sign-in failed");
       }
 
-      setOnayTokens(response.data);
+      setOnayTokens(response.data.data);
     });
   };
 
@@ -373,18 +435,19 @@ export default function Admin() {
       return;
     }
 
-    await runOnayAction(async () => {
-      const response = await apiRequest<OnayQrStartResponse>("/api/onay/qr-start", {
+    await runOnayAction("qr-start", async () => {
+      const response = await apiRequestWithMeta<OnayQrStartResponse>("/api/onay/qr-start", {
         method: "POST",
         token,
         body: JSON.stringify({ terminal: trimmedTerminal }),
       });
+      recordOnayLatency(response.headers, "qr-start");
 
-      if (!response.success || !response.data) {
-        throw new Error(response.message || "Terminal check failed");
+      if (!response.data.success || !response.data.data) {
+        throw new Error(response.data.message || "Terminal check failed");
       }
 
-      setOnayTrip(response.data);
+      setOnayTrip(response.data.data);
     });
   };
 
@@ -656,6 +719,37 @@ export default function Admin() {
             Test Onay endpoints directly from admin panel: <code>/api/onay/sign-in</code> and{" "}
             <code>/api/onay/qr-start</code>.
           </p>
+
+          {/* MODIFIED BY AI: 2026-02-12 - show live Onay latency metrics from X-Onay-Latency-Ms header */}
+          {/* FILE: client/src/pages/Admin.tsx */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-xl border border-cyan-300/20 bg-cyan-500/10 p-3 text-xs text-cyan-100/90">
+            <div>
+              last latency:{" "}
+              <span className="font-semibold text-cyan-50">
+                {onayLastLatencyMs !== null ? `${onayLastLatencyMs} ms` : "-"}
+              </span>
+            </div>
+            <div>
+              average latency:{" "}
+              <span className="font-semibold text-cyan-50">
+                {onayAvgLatencyMs !== null ? `${onayAvgLatencyMs} ms` : "-"}
+              </span>
+            </div>
+            <div>
+              samples:{" "}
+              <span className="font-semibold text-cyan-50">{onayLatencySamples.length}</span>
+            </div>
+            <div>
+              endpoint:{" "}
+              <span className="font-semibold text-cyan-50">{onayLastLatencyEndpoint || "-"}</span>
+            </div>
+            <div className="sm:col-span-2">
+              updated:{" "}
+              <span className="font-semibold text-cyan-50">
+                {onayLatencyUpdatedAt ? onayLatencyUpdatedAt.toLocaleTimeString() : "-"}
+              </span>
+            </div>
+          </div>
 
           {onayError ? (
             <div className="rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-sm text-red-200">
@@ -954,6 +1048,15 @@ export default function Admin() {
                         <div>ip: {session.ip || "-"}</div>
                         <div>login time: {new Date(session.loginTime).toLocaleString()}</div>
                         <div>last seen: {new Date(session.lastSeen).toLocaleString()}</div>
+                      </div>
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          onClick={() => void deleteSession(session.id)}
+                          disabled={isBusy || isRefreshingSessions}
+                          className={`rounded-lg border border-red-500/50 bg-red-950/20 px-2.5 py-1.5 text-xs text-red-200 hover:bg-red-900/30 ${interactiveBtnClass}`}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </motion.article>
                   ))}
