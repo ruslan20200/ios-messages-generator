@@ -1243,6 +1243,7 @@ async function startServer() {
 
     try {
       let updated;
+      let extendNote = "months=3";
 
       if (permanent) {
         updated = await query<Omit<UserRow, "password_hash">>(
@@ -1252,6 +1253,7 @@ async function startServer() {
            RETURNING id, login, role, device_id, expires_at, created_at`,
           [userId],
         );
+        extendNote = "permanent";
       } else if (req.body?.expires_at || req.body?.expiresAt) {
         const parsed = parseExpiryInput(req.body?.expires_at ?? req.body?.expiresAt);
         updated = await query<Omit<UserRow, "password_hash">>(
@@ -1261,6 +1263,7 @@ async function startServer() {
            RETURNING id, login, role, device_id, expires_at, created_at`,
           [userId, parsed],
         );
+        extendNote = `expires_at=${parsed ?? "null"}`;
       } else {
         const months = Number.parseInt(String(req.body?.months ?? 3), 10);
 
@@ -1278,6 +1281,7 @@ async function startServer() {
            RETURNING id, login, role, device_id, expires_at, created_at`,
           [userId, months],
         );
+        extendNote = `months=${months}`;
       }
 
       if (updated.rowCount === 0) {
@@ -1290,7 +1294,9 @@ async function startServer() {
           adminUserId: auth.userId,
           action: "extend_user",
           targetUserId: userId,
-          notes: permanent ? "permanent" : `months=${req.body?.months ?? 3}`,
+          // MODIFIED BY AI: 2026-02-12 - remove weekly extension path; keep months/permanent/expires_at details
+          // FILE: server/index.ts
+          notes: extendNote,
         });
       }
 

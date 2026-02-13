@@ -59,6 +59,8 @@ type OnayQrStartResponse = {
 };
 
 type OnayLatencyEndpoint = "sign-in" | "qr-start";
+type CreateUserTerm = "1w" | "1m" | "3m" | "6m" | "permanent";
+type ExtendUserTerm = "1m" | "3m" | "6m" | "permanent";
 
 const formatDate = (value: string | null) => {
   if (!value) return "Permanent";
@@ -79,8 +81,21 @@ const maskToken = (value: string) => {
   return `${value.slice(0, 10)}...${value.slice(-6)}`;
 };
 
-const toFutureIso = (months: number) => {
+// MODIFIED BY AI: 2026-02-12 - keep 1-week trial only for user creation; extension starts from 1 month
+// FILE: client/src/pages/Admin.tsx
+const toFutureIsoByTerm = (term: Exclude<CreateUserTerm, "permanent">) => {
   const date = new Date();
+  if (term === "1w") {
+    date.setDate(date.getDate() + 7);
+    return date.toISOString();
+  }
+
+  const months =
+    term === "1m"
+      ? 1
+      : term === "3m"
+        ? 3
+        : 6;
   date.setMonth(date.getMonth() + months);
   return date.toISOString();
 };
@@ -91,7 +106,9 @@ const glassCardClass =
 const interactiveBtnClass =
   "transition-all duration-200 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed";
 
-const SESSIONS_AUTO_REFRESH_MS = 15000;
+// MODIFIED BY AI: 2026-02-12 - increase sessions auto-refresh interval from 15s to 10m
+// FILE: client/src/pages/Admin.tsx
+const SESSIONS_AUTO_REFRESH_MS = 10 * 60 * 1000;
 const SWIPE_OPEN_THRESHOLD = 48;
 const SWIPE_CLOSE_THRESHOLD = 32;
 
@@ -128,7 +145,7 @@ export default function Admin() {
   // FILE: client/src/pages/Admin.tsx
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [newRole, setNewRole] = useState<"admin" | "user">("user");
-  const [newTerm, setNewTerm] = useState<"3m" | "6m" | "permanent">("3m");
+  const [newTerm, setNewTerm] = useState<CreateUserTerm>("1m");
   // MODIFIED BY AI: 2026-02-13 - add Onay tools state (sign-in + terminal test) in admin panel
   // FILE: client/src/pages/Admin.tsx
   const [onayTerminal, setOnayTerminal] = useState("");
@@ -258,9 +275,7 @@ export default function Admin() {
     const expiresAt =
       newTerm === "permanent"
         ? null
-        : newTerm === "3m"
-          ? toFutureIso(3)
-          : toFutureIso(6);
+        : toFutureIsoByTerm(newTerm);
 
     await runAction(async () => {
       await apiRequest("/admin/users", {
@@ -278,7 +293,7 @@ export default function Admin() {
       setNewPassword("");
       setShowCreatePassword(false);
       setNewRole("user");
-      setNewTerm("3m");
+      setNewTerm("1m");
       setShowCreateForm(false);
     });
   };
@@ -303,16 +318,17 @@ export default function Admin() {
     });
   };
 
-  const extendUser = async (targetUserId: number, mode: "3m" | "6m" | "permanent") => {
+  const extendUser = async (targetUserId: number, mode: ExtendUserTerm) => {
+    const payload =
+      mode === "permanent"
+        ? { permanent: true }
+        : { months: mode === "1m" ? 1 : mode === "3m" ? 3 : 6 };
+
     await runAction(async () => {
       await apiRequest(`/admin/users/${targetUserId}/extend`, {
         method: "POST",
         token,
-        body: JSON.stringify(
-          mode === "permanent"
-            ? { permanent: true }
-            : { months: mode === "3m" ? 3 : 6 },
-        ),
+        body: JSON.stringify(payload),
       });
     });
   };
@@ -538,7 +554,7 @@ export default function Admin() {
     await deleteUser(targetUserId);
   };
 
-  const handleSwipeExtend = async (targetUserId: number, mode: "3m" | "6m" | "permanent") => {
+  const handleSwipeExtend = async (targetUserId: number, mode: ExtendUserTerm) => {
     closeSwipe();
     await extendUser(targetUserId, mode);
   };
@@ -664,9 +680,11 @@ export default function Admin() {
 
                 <select
                   value={newTerm}
-                  onChange={(event) => setNewTerm(event.target.value as "3m" | "6m" | "permanent")}
+                  onChange={(event) => setNewTerm(event.target.value as CreateUserTerm)}
                   className="rounded-xl bg-white/5 border border-white/15 px-3 py-2.5 outline-none focus:border-[#0A84FF]/70 transition-colors"
                 >
+                  <option value="1w">1 week (trial)</option>
+                  <option value="1m">1 month</option>
                   <option value="3m">3 months</option>
                   <option value="6m">6 months</option>
                   <option value="permanent">Permanent</option>
@@ -854,13 +872,20 @@ export default function Admin() {
                       key={entry.id}
                       className="relative rounded-xl border border-white/10 bg-white/5 overflow-hidden"
                     >
-                      <div className="sm:hidden absolute inset-y-0 right-0 w-44 grid grid-cols-2 gap-2 p-2 bg-[#0d0f13] border-l border-white/10">
+                      <div className="sm:hidden absolute inset-y-0 right-0 w-52 grid grid-cols-3 gap-2 p-2 bg-[#0d0f13] border-l border-white/10">
                         <button
                           onClick={() => void handleSwipeResetDevice(entry.id)}
                           disabled={isBusy}
                           className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2 text-[11px] ${interactiveBtnClass}`}
                         >
                           Reset
+                        </button>
+                        <button
+                          onClick={() => void handleSwipeExtend(entry.id, "1m")}
+                          disabled={isBusy}
+                          className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2 text-[11px] ${interactiveBtnClass}`}
+                        >
+                          +1M
                         </button>
                         <button
                           onClick={() => void handleSwipeExtend(entry.id, "3m")}
@@ -886,7 +911,7 @@ export default function Admin() {
                       </div>
 
                       <motion.div
-                        animate={{ x: swipedUserId === entry.id ? -176 : 0 }}
+                        animate={{ x: swipedUserId === entry.id ? -208 : 0 }}
                         transition={{ type: "spring", stiffness: 330, damping: 28 }}
                         onTouchStart={(event) =>
                           onUserTouchStart(entry.id, event.changedTouches[0]?.clientX ?? 0)
@@ -920,13 +945,20 @@ export default function Admin() {
                           </button>
                         </div>
 
-                        <div className="hidden sm:grid grid-cols-4 gap-2">
+                        <div className="hidden sm:grid grid-cols-5 gap-2">
                           <button
                             onClick={() => resetDevice(entry.id)}
                             disabled={isBusy}
                             className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
                           >
                             Reset Device
+                          </button>
+                          <button
+                            onClick={() => extendUser(entry.id, "1m")}
+                            disabled={isBusy}
+                            className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
+                          >
+                            +1 Month
                           </button>
                           <button
                             onClick={() => extendUser(entry.id, "3m")}

@@ -1,6 +1,3 @@
--- // MODIFIED BY AI: 2026-02-12 - create auth tables for users, sessions, admin actions
--- // FILE: migrations/001_create_auth_tables.sql
-
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   login TEXT NOT NULL UNIQUE,

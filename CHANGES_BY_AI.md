@@ -470,3 +470,37 @@ action: "delete_user",
 targetUserId: null,
 notes: `deleted_user_id=${userId}`,
 ```
+
+## 46) client/src/pages/Admin.tsx (sessions auto-refresh every 10 minutes)
+- Description: Increased admin sessions auto-refresh interval from 15 seconds to 10 minutes to reduce frequent background polling.
+- Date: 2026-02-12
+- Diff sample:
+```ts
+const SESSIONS_AUTO_REFRESH_MS = 10 * 60 * 1000;
+```
+
+## 47) client/src/pages/Admin.tsx + server/index.ts (new terms: 1 week trial and 1 month)
+- Description: Added new account term options `1 week (trial)` and `1 month` in admin create-user form and extend actions; backend `/admin/users/:id/extend` now supports `weeks` in addition to `months`.
+- Date: 2026-02-12
+- Diff sample:
+```tsx
+type UserTerm = "1w" | "1m" | "3m" | "6m" | "permanent";
+<option value="1w">1 week (trial)</option>
+<option value="1m">1 month</option>
+```
+```ts
+if (hasWeeks) {
+  ... make_interval(weeks => $2::int)
+}
+```
+
+## 48) client/src/pages/Admin.tsx + server/index.ts (remove 1-week option from extension)
+- Description: Removed `1 week` from user extension flow as requested. Weekly term remains available only at user creation (`1 week (trial)`), while extension supports `1 month / 3 months / 6 months / permanent`.
+- Date: 2026-02-12
+- Diff sample:
+```tsx
+type ExtendUserTerm = "1m" | "3m" | "6m" | "permanent";
+```
+```ts
+// weekly extend branch removed from /admin/users/:id/extend
+```
