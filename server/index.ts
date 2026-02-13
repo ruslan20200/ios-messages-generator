@@ -1220,7 +1220,10 @@ async function startServer() {
         await logAdminAction({
           adminUserId: auth.userId,
           action: "delete_user",
-          targetUserId: userId,
+          // MODIFIED BY AI: 2026-02-12 - avoid FK violation by not linking deleted user id in target_user_id
+          // FILE: server/index.ts
+          targetUserId: null,
+          notes: `deleted_user_id=${userId}`,
         });
       }
 

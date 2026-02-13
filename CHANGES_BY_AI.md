@@ -460,3 +460,13 @@ export async function apiRequestWithMeta<T>(...) {
 recordOnayLatency(response.headers, "qr-start");
 {onayLastLatencyMs !== null ? `${onayLastLatencyMs} ms` : "-"}
 ```
+
+## 45) server/index.ts (fix FK warning in delete_user admin log)
+- Description: Fixed admin action logging after user deletion to prevent `admin_actions_target_user_id_fkey` violation: `target_user_id` is now `NULL` and deleted id is preserved in `notes`.
+- Date: 2026-02-12
+- Diff sample:
+```ts
+action: "delete_user",
+targetUserId: null,
+notes: `deleted_user_id=${userId}`,
+```
