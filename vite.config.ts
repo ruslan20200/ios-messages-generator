@@ -15,11 +15,41 @@ const plugins = [
   VitePWA({
     registerType: "autoUpdate",
     filename: "service-worker.js",
+    cleanupOutdatedCaches: true,
     includeAssets: ["favicon.ico", "apple-touch-icon.png", "robots.txt", "offline.html"],
     workbox: {
-      globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,json,woff2}", "manifest.webmanifest"],
+      globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,json,woff2}", "manifest.json"],
       navigateFallback: "/index.html",
       maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+      runtimeCaching: [
+        {
+          urlPattern: ({ request }) => request.mode === "navigate",
+          handler: "NetworkFirst",
+          options: {
+            cacheName: "app-pages",
+            networkTimeoutSeconds: 3,
+            expiration: {
+              maxEntries: 20,
+              maxAgeSeconds: 60 * 60 * 24,
+            },
+          },
+        },
+        {
+          urlPattern: ({ request, url }) =>
+            ["script", "style", "image", "font"].includes(request.destination) &&
+            !url.pathname.startsWith("/api") &&
+            !url.pathname.startsWith("/auth") &&
+            !url.pathname.startsWith("/admin"),
+          handler: "StaleWhileRevalidate",
+          options: {
+            cacheName: "app-assets",
+            expiration: {
+              maxEntries: 120,
+              maxAgeSeconds: 60 * 60 * 24 * 30,
+            },
+          },
+        },
+      ],
     },
     manifest: false,
   }),
@@ -45,7 +75,23 @@ export default defineConfig({
     strictPort: false,
     host: true,
     proxy: {
+      "/auth": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+      "/admin": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
       "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+      "/docs": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+      "/docs.json": {
         target: "http://localhost:3000",
         changeOrigin: true,
       },

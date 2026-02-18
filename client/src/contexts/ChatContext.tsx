@@ -1,6 +1,6 @@
 import { addMinutes, format } from "date-fns";
 import { nanoid } from "nanoid";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 
 export interface Message {
   id: string;
@@ -27,6 +27,7 @@ interface ChatContextType {
   messages: Message[];
   updateSettings: (route: string, number: string, price?: string) => void;
   sendMessage: (code: string) => void;
+  deleteMessage: (id: string) => void;
   clearHistory: () => void;
 }
 
@@ -39,6 +40,23 @@ const SESSION_STORAGE_KEY_MESSAGES = "ios_msg_history_session";
 const STORAGE_KEY_MESSAGES_API = "ios_msg_history_api";
 const MAX_PERSISTED_MESSAGES = 140;
 const STORAGE_WRITE_DEBOUNCE_MS = 180;
+
+const runWhenIdle = (task: () => void): (() => void) => {
+  if (typeof window === "undefined") return () => {};
+
+  const win = window as Window & {
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+    cancelIdleCallback?: (handle: number) => void;
+  };
+
+  if (typeof win.requestIdleCallback === "function") {
+    const id = win.requestIdleCallback(task, { timeout: 800 });
+    return () => win.cancelIdleCallback?.(id);
+  }
+
+  const timeoutId = window.setTimeout(task, 0);
+  return () => window.clearTimeout(timeoutId);
+};
 
 const restoreManualMessages = (): Message[] => {
   const sessionSaved = sessionStorage.getItem(SESSION_STORAGE_KEY_MESSAGES);
@@ -75,6 +93,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [messages, setMessages] = useState<Message[]>(restoreManualMessages);
+  const lastSerializedMessagesRef = useRef("");
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
@@ -82,17 +101,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const trimmedMessages = messages.slice(-MAX_PERSISTED_MESSAGES);
-    sessionStorage.setItem(SESSION_STORAGE_KEY_MESSAGES, JSON.stringify(trimmedMessages));
+    const serialized = JSON.stringify(trimmedMessages);
 
+    if (lastSerializedMessagesRef.current === serialized) {
+      return;
+    }
+
+    lastSerializedMessagesRef.current = serialized;
+    sessionStorage.setItem(SESSION_STORAGE_KEY_MESSAGES, serialized);
+
+    let cancelIdle = () => {};
     const timer = window.setTimeout(() => {
-      localStorage.setItem(
-        STORAGE_KEY_MESSAGES,
-        JSON.stringify(trimmedMessages),
-      );
+      cancelIdle = runWhenIdle(() => {
+        localStorage.setItem(STORAGE_KEY_MESSAGES, serialized);
+      });
     }, STORAGE_WRITE_DEBOUNCE_MS);
 
     return () => {
       window.clearTimeout(timer);
+      cancelIdle();
     };
   }, [messages]);
 
@@ -161,9 +188,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setMessages([]);
   };
 
+  const deleteMessage = (id: string) => {
+    setMessages((prev) => prev.filter((message) => message.id !== id));
+  };
+
   return (
     <ChatContext.Provider
-      value={{ settings, messages, updateSettings, sendMessage, clearHistory }}
+      value={{ settings, messages, updateSettings, sendMessage, deleteMessage, clearHistory }}
     >
       {children}
     </ChatContext.Provider>

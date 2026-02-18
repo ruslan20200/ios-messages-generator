@@ -4,24 +4,41 @@
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { motion } from "framer-motion";
+import { type MouseEventHandler, type PointerEventHandler, useRef } from "react";
 
 interface MessageBubbleProps {
+  id: string;
   text: string;
   isMe: boolean;
   timestamp: Date;
   showTimestamp?: boolean;
+  isSelected?: boolean;
+  isDimmed?: boolean;
   details?: {
     link: string;
   };
+  onOpenActions?: (payload: {
+    id: string;
+    text: string;
+    isMe: boolean;
+    rect: DOMRect;
+  }) => void;
 }
 
 export function MessageBubble({
+  id,
   text,
   isMe,
   timestamp,
   showTimestamp,
+  isSelected,
+  isDimmed,
   details,
+  onOpenActions,
 }: MessageBubbleProps) {
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+
   const formatMessageTime = (date: Date) => {
     if (isToday(date)) {
       return `Сегодня ${format(date, "HH:mm")}`;
@@ -53,7 +70,8 @@ export function MessageBubble({
             href={details.link}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-ios-blue underline decoration-ios-blue cursor-pointer"
+            onContextMenu={(event) => event.preventDefault()}
+            className="cursor-pointer select-none text-ios-blue underline decoration-ios-blue [-webkit-touch-callout:none] [-webkit-user-select:none] [user-select:none]"
           >
             {line}
           </a>
@@ -61,6 +79,47 @@ export function MessageBubble({
       }
       return <div key={index}>{line}</div>;
     });
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const openActions = () => {
+    if (!onOpenActions || !bubbleRef.current) return;
+    onOpenActions({
+      id,
+      text,
+      isMe,
+      rect: bubbleRef.current.getBoundingClientRect(),
+    });
+  };
+
+  const handlePointerDown: PointerEventHandler<HTMLDivElement> = (event) => {
+    if (!onOpenActions) return;
+    if ((event.target as HTMLElement)?.closest("a")) return;
+
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      openActions();
+    }, 420);
+  };
+
+  const handlePointerUp: PointerEventHandler<HTMLDivElement> = () => {
+    clearLongPressTimer();
+  };
+
+  const handlePointerCancel: PointerEventHandler<HTMLDivElement> = () => {
+    clearLongPressTimer();
+  };
+
+  const handleContextMenu: MouseEventHandler<HTMLDivElement> = (event) => {
+    if (!onOpenActions) return;
+    event.preventDefault();
+    openActions();
   };
 
   return (
@@ -73,18 +132,33 @@ export function MessageBubble({
 
       <div className={cn("flex w-full", isMe ? "justify-end" : "justify-start")}>
         <motion.div
+          ref={bubbleRef}
           initial={{ opacity: 0, y: 10, scale: 0.985 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+          animate={{
+            opacity: 1,
+            y: isSelected ? -3 : 0,
+            scale: isSelected ? 1.028 : 1,
+          }}
+          transition={{
+            duration: isSelected ? 0.14 : 0.18,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onContextMenu={handleContextMenu}
           className={cn(
-            "relative break-words shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+            "relative break-words select-none shadow-[0_2px_8px_rgba(0,0,0,0.2)] [-webkit-touch-callout:none] [-webkit-user-select:none] [user-select:none]",
+            isSelected && "z-[122] shadow-[0_14px_26px_rgba(0,0,0,0.42)]",
+            isDimmed && !isSelected && "opacity-55 blur-[0.8px] saturate-75",
             isSentCode
               ? "max-w-[40%] px-2.5 py-1.25"
               : isMe
-                ? "max-w-[54%] px-3 py-1.75"
-                : "max-w-[52%] px-3 py-1.75",
+                ? "max-w-[60%] px-3 py-1.75"
+                : "max-w-[58%] px-3 py-1.75",
             isMe
-              ? "rounded-[22px] rounded-br-[10px] bg-[#32d957] text-[#eef7ef]"
+              ? "rounded-[22px] rounded-br-[10px] bg-[#2fbe51] text-[#eaf4ec]"
               : "rounded-[22px] rounded-bl-[10px] bg-[#2a2b34] text-[#f1f2f6]",
             isSentCode
               ? cn("leading-[1.04] font-medium tracking-[0.005em]", sentCodeSizeClass)
@@ -95,7 +169,7 @@ export function MessageBubble({
         >
           <div
             className={cn(
-              isMe && "underline decoration-2 underline-offset-[3px] decoration-[#eaf4ec]",
+              isMe && "underline decoration-2 underline-offset-[3px] decoration-[#d8eadc]",
             )}
           >
             {renderText(text)}
@@ -107,7 +181,7 @@ export function MessageBubble({
               "pointer-events-none absolute -bottom-[1px] h-[12px] w-[14px]",
               isMe ? "-right-[5px]" : "-left-[6px] -scale-x-100",
             )}
-            style={{ color: isMe ? "#32d957" : "#2a2b34" }}
+            style={{ color: isMe ? "#2fbe51" : "#2a2b34" }}
             aria-hidden
           >
             <path

@@ -9,7 +9,9 @@ import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
-const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
+const API_BASE = String(import.meta.env.VITE_API_BASE || "")
+  .trim()
+  .replace(/\/+$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 
 const glassCardClass =

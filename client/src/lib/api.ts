@@ -1,7 +1,9 @@
 // MODIFIED BY AI: 2026-02-12 - add API client with credentials-first auth and fallback bearer token support
 // FILE: client/src/lib/api.ts
 
-const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
+const API_BASE = String(import.meta.env.VITE_API_BASE || "")
+  .trim()
+  .replace(/\/+$/, "");
 
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 

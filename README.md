@@ -1,90 +1,137 @@
-  // MODIFIED BY AI: 2026-02-12 - documented Supabase setup, migrations, auth/admin API, deploy and manual QA flow
-// FILE: README.md
+# iOS Messages Generator
 
-# iOS Messages Generator + Auth/Admin (Supabase)
+Мобильное веб-приложение (PWA) для генерации сообщений в стиле iMessage, работы с QR, авторизации пользователей и админ-управления доступом.
 
-Проект: frontend на React + Vite и backend на Express.
+## Что умеет приложение
 
-В этой версии добавлены:
-- авторизация `/auth/login` с привязкой `deviceId`;
-- роли `admin/user`;
-- админ API для управления пользователями, сроками доступа и сессиями;
-- SQL миграция для Supabase PostgreSQL;
-- mobile-first админ-панель и страница логина.
+- Авторизация по логину/паролю + привязка к устройству (`deviceId`)
+- Роли пользователей: `admin` / `user`
+- Чат в двух режимах:
+  - API-режим (запрос в Onay)
+  - Manual-режим (локальная генерация сообщения)
+- Сканер QR по кнопке `+` в чате:
+  - авто-распознавание через `BarcodeDetector`
+  - fallback через `jsQR`
+- Контекстное меню сообщений по long-press:
+  - `Скопировать`
+  - `Удалить`
+- Страница QR-билета: QR содержит **сам код проверки** (не ссылку)
+- PWA: установка на главный экран, офлайн-базовая работа, кэширование ассетов
+- Админ-панель:
+  - создание/удаление пользователей
+  - сброс привязки устройства
+  - продление доступа
+  - управление сессиями
 
-## 1. Что сделать в Supabase (шаги для Руслана)
+---
 
-1. Открой https://supabase.com и нажми `Start your project`.
-2. Нажми `New project`.
-3. Выбери Organization.
-4. Заполни:
-- `Name` (например `ios-messages-generator`)
-- `Database Password` (сохрани отдельно)
-- `Region` (ближайший)
-5. Нажми `Create new project` и дождись статуса `Healthy`.
-6. В левом меню открой `Project Settings` -> `Database`.
-7. Пролистай до блока `Connection string`.
-8. Выбери режим `URI` и скопируй строку вида:
-`postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres`
-9. В этой строке замени `<password>` на реальный пароль БД.
-10. Сохрани как `DATABASE_URL` в backend env.
+## Стек
 
-## 2. Что сделать в Express
+### Frontend
+- React + TypeScript
+- Vite
+- Tailwind CSS
+- Radix UI
+- Wouter (роутинг)
+- Framer Motion
 
-1. Создай `.env` на основе `.env.example`.
-2. Заполни минимум:
+### Backend
+- Node.js + Express + TypeScript (`tsx`)
+- PostgreSQL (Supabase)
+- JWT + cookie auth
+- `bcryptjs` для паролей
+
+---
+
+## Структура проекта
+
+- `client/` — фронтенд
+- `server/` — backend API
+- `shared/` — общие типы/константы
+- `migrations/` — SQL-миграции
+
+Ключевые файлы:
+- `client/src/pages/Chat.tsx` — основной чат + composer + сканер/меню сообщений
+- `client/src/components/QrScannerSheet.tsx` — камера и распознавание QR
+- `client/src/pages/QrPage.tsx` — экран QR-билета
+- `client/src/contexts/AuthContext.tsx` — auth-состояние
+- `client/src/contexts/ChatContext.tsx` — manual-чат/история
+- `server/index.ts` — маршруты API
+- `migrations/001_create_auth_tables.sql` — базовая схема БД
+
+---
+
+## Быстрый старт (локально)
+
+## 1) Установить зависимости
+
+```bash
+pnpm install
+```
+
+## 2) Подготовить `.env`
+
+Минимально нужны:
+
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `CORS_ORIGIN`
-- `AUTH_COOKIE_SECURE` (`false` локально, `true` в проде HTTPS)
-3. Запусти API:
-```bash
-pnpm dev:api
-```
-4. Прогони миграцию через Supabase SQL Editor:
-- Открой `SQL Editor` -> `New query`
-- Вставь SQL из `migrations/001_create_auth_tables.sql`
-- Нажми `Run`
+- `AUTH_COOKIE_SECURE`
 
-Альтернатива через `psql`:
+Дополнительно для Onay/API-функций — переменные `ONAY_*`.
+
+## 3) Применить миграцию
+
+Через Supabase SQL Editor запусти:
+
+- `migrations/001_create_auth_tables.sql`
+
+или через `psql`:
+
 ```bash
 psql "$DATABASE_URL" -f migrations/001_create_auth_tables.sql
 ```
 
-## 3. Что сделать в React
+## 4) Запустить backend
 
-1. Запусти клиент:
+```bash
+pnpm dev:api
+```
+
+## 5) Запустить frontend
+
 ```bash
 pnpm dev
 ```
-2. На странице `/login` генерируется `deviceId` и сохраняется в `localStorage`.
-3. При логине отправляется `{ login, password, deviceId }`.
-4. Токен хранится в httpOnly cookie (по умолчанию, безопаснее).
-5. Fallback (менее безопасный):
-- `VITE_USE_TOKEN_FALLBACK=true`
-- тогда токен дублируется в `localStorage`.
 
-## 4. Миграции
+Frontend: `http://localhost:5173`
 
-Основная миграция: `migrations/001_create_auth_tables.sql`
+Backend: `http://localhost:3000`
 
-Создаёт таблицы:
-- `users`
-- `sessions`
-- `admin_actions`
+---
 
-В `users.expires_at`:
-- `NULL` = бессрочный доступ;
-- дата в прошлом = вход блокируется (`410`).
+## Команды
 
-## 5. Новые API
+```bash
+pnpm dev          # frontend (Vite)
+pnpm dev:api      # backend (Express)
+pnpm check        # TypeScript typecheck
+pnpm test:server  # server tests
+pnpm build        # production build (client + server bundle)
+```
 
-### Auth
+---
+
+## Auth и роли
+
+### Основные эндпоинты
+
 - `POST /auth/login`
 - `GET /auth/me`
 - `POST /auth/logout`
 
-### Admin (только `role=admin`)
+### Админ-эндпоинты
+
 - `POST /admin/users`
 - `GET /admin/users`
 - `POST /admin/users/:id/reset-device`
@@ -93,94 +140,101 @@ pnpm dev
 - `GET /admin/sessions`
 - `POST /admin/cleanup-expired`
 
-## 6. Примеры curl
+---
 
-Логин:
-```bash
-curl -i -X POST http://localhost:3000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"login":"admin","password":"admin123","deviceId":"phone-A-uuid"}'
+## Работа QR и чата
+
+## QR-сканер в чате
+
+- Кнопка `+` открывает camera sheet
+- После успешного сканирования terminal ID подставляется в поле ввода
+- Поддерживаются ошибки:
+  - нет доступа к камере
+  - QR не распознан
+  - неверный формат
+
+## Формат распознаваемого QR для terminal
+
+Ожидается:
+
+```text
+http://c.onay.kz/{TERMINAL_ID}
 ```
 
-Создать пользователя (admin token):
-```bash
-curl -X POST http://localhost:3000/admin/users \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <ADMIN_JWT>" \
-  -d '{"login":"user1","password":"pass12345","role":"user","expires_at":null}'
-```
+## QR на странице билета
 
-Сбросить устройство:
-```bash
-curl -X POST http://localhost:3000/admin/users/2/reset-device \
-  -H "Authorization: Bearer <ADMIN_JWT>"
-```
+На странице `/qr/:code` QR кодирует **сам `code`** (например `959E2`), чтобы сканер показывал код напрямую.
 
-Продлить на 3 месяца:
-```bash
-curl -X POST http://localhost:3000/admin/users/2/extend \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <ADMIN_JWT>" \
-  -d '{"months":3}'
-```
+---
 
-Очистка просроченных:
-```bash
-curl -X POST http://localhost:3000/admin/cleanup-expired \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <ADMIN_JWT>" \
-  -d '{"mode":"deactivate"}'
-```
+## PWA и производительность
 
-## 7. Ручное тестирование (сценарий)
+Сделано для быстрого старта на слабом интернете:
 
-1. Админ создаёт пользователя в `/admin`.
-2. Логин на телефоне A (`deviceId=A`) -> успешно.
-3. Логин того же пользователя на телефоне B (`deviceId=B`) -> ошибка
-`Этот аккаунт уже используется на другом устройстве`.
-4. Админ нажимает `Reset Device`.
-5. Повторный логин на телефоне B -> успешно.
+- lazy loading страниц
+- smart prefetch только нужных роутов (`Login`, `Chat`) в idle
+- неблокирующий bootstrap auth
+- оптимизированная запись истории сообщений (dedupe + idle write)
+- runtime caching для страниц и ассетов
+- boot-shell до инициализации React
 
-## 8. Cleanup по cron
+---
 
-Ручной запуск скрипта:
-```bash
-pnpm tsx server/scripts/cleanupExpiredUsers.ts deactivate
-pnpm tsx server/scripts/cleanupExpiredUsers.ts delete
-```
+## Камера: почему иногда просит доступ снова
 
-Пример cron (Linux, каждый день в 02:30):
-```cron
-30 2 * * * cd /path/to/repo && pnpm tsx server/scripts/cleanupExpiredUsers.ts deactivate >> cleanup.log 2>&1
-```
+Браузер запоминает разрешение по домену.
 
-## 9. Деплой (env vars)
+Если используешь `ngrok` с новым URL каждый раз, доступ к камере будет спрашиваться снова.
 
-Обязательные серверные переменные:
-- `DATABASE_URL`
-- `JWT_SECRET`
-- `CORS_ORIGIN`
-- `AUTH_COOKIE_SECURE`
-- `AUTH_COOKIE_SAME_SITE`
-- `PUBLIC_BASE_URL`
+Рекомендации:
+- использовать постоянный домен (reserved domain / собственный домен)
+- в Safari для сайта включить Camera = Allow
 
-Для текущего Onay функционала дополнительно:
-- `ONAY_APP_TOKEN`
-- `ONAY_DEVICE_ID`
-- `ONAY_PHONE_NUMBER`
-- `ONAY_PASSWORD`
-- `ONAY_PUSH_TOKEN`
+---
 
-## 10. Безопасность
+## Деплой
 
-- Пароли хранятся только как `bcrypt` хэш.
-- Логин ограничен rate-limit (IP-based in-memory limiter).
-- Для продакшена выставляй cookie только с `Secure` на HTTPS.
-- Если используешь fallback token в `localStorage`, учитывай риск XSS.
+Поддерживаются варианты через:
+- Netlify (`netlify.toml`)
+- Render (`render.yaml`)
 
-## 11. Bootstrap first admin
+Важно:
+- backend и frontend должны иметь корректные env
+- `CORS_ORIGIN` должен содержать ваш frontend-домен
+- в production включить безопасные cookie-настройки (`AUTH_COOKIE_SECURE=true`)
 
-Если база пустая и в системе нет администратора, создай первого админа скриптом:
-```bash
-pnpm tsx server/scripts/createAdminUser.ts admin admin123
-```
+---
+
+## Troubleshooting
+
+### `POST /auth/login` возвращает 404 на `:5173`
+
+Причина: запрос ушёл в Vite вместо API.
+
+Проверь dev proxy в `vite.config.ts` и путь запроса.
+
+### `pnpm dev:api` -> `EADDRINUSE: 3000`
+
+Порт уже занят другим процессом. Останови текущий процесс или используй другой порт.
+
+### QR-сканер на iPhone нестабилен
+
+Проверь:
+- HTTPS-домен
+- разрешение камеры в Safari
+- открытие именно через тот же домен, где выдавали permission
+
+---
+
+## Безопасность
+
+- Пароли хранятся как bcrypt hash
+- JWT в cookie + серверная проверка сессии
+- rate-limit на логин
+- device-binding для user-аккаунтов
+
+---
+
+## Лицензия
+
+Внутренний проект. Использование и распространение по договорённости владельца репозитория.

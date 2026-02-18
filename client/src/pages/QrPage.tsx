@@ -13,7 +13,7 @@ export default function QrPage({ params }: QrPageProps) {
   const [qrSize, setQrSize] = useState(230);
   const rawCode = (params?.code || "").trim();
   const displayCode = rawCode ? rawCode.toUpperCase() : "0000X";
-  const qrValue = rawCode ? `https://qr.tha.kz/${rawCode}` : "https://qr.tha.kz";
+  const qrValue = displayCode;
   const year = new Date().getFullYear();
 
   useEffect(() => {

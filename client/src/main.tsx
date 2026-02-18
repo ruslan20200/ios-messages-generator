@@ -16,4 +16,4 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 
-registerSW({ immediate: true });
+registerSW({ immediate: false });

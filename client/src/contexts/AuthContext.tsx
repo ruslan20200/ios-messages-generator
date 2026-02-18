@@ -25,6 +25,7 @@ type AuthContextType = {
 const TOKEN_STORAGE_KEY = "ios_msg_auth_token";
 const USER_CACHE_KEY = "ios_msg_auth_user_cache";
 const USE_TOKEN_FALLBACK = import.meta.env.VITE_USE_TOKEN_FALLBACK === "true";
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 5000;
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // MODIFIED BY AI: 2026-02-13 - bootstrap user from local cache to avoid blocking app on slow networks
   // FILE: client/src/contexts/AuthContext.tsx
   const [user, setUser] = useState<AuthUser | null>(() => readCachedUser());
-  const [isLoading, setIsLoading] = useState(() => readCachedUser() === null);
+  const isLoading = false;
   const [token, setToken] = useState<string | null>(() => {
     return USE_TOKEN_FALLBACK ? localStorage.getItem(TOKEN_STORAGE_KEY) : null;
   });
@@ -85,10 +86,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshUser = useCallback(async () => {
+    const controller = new AbortController();
+    const timeoutHandle = window.setTimeout(() => {
+      controller.abort();
+    }, AUTH_BOOTSTRAP_TIMEOUT_MS);
+
     try {
       const response = await apiRequest<{ success: boolean; data: { user: AuthUser } }>(
         "/auth/me",
-        { token },
+        { token, signal: controller.signal },
       );
 
       setUser(response.data.user);
@@ -100,20 +106,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         writeToken(null);
       }
       // Keep cached user when network is slow/offline or server temporarily unavailable.
+    } finally {
+      window.clearTimeout(timeoutHandle);
     }
   }, [token, writeCachedUser, writeToken]);
 
   useEffect(() => {
-    let isMounted = true;
-    refreshUser().finally(() => {
-      if (isMounted) {
-        setIsLoading(false);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-    };
+    void refreshUser();
   }, [refreshUser]);
 
   const login = useCallback(

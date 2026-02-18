@@ -3,18 +3,50 @@
 
 import { ChatHeader } from "@/components/ChatHeader";
 import { MessageBubble } from "@/components/MessageBubble";
+import { QrScannerSheet } from "@/components/QrScannerSheet";
 import { useChat, type Message as ChatMessage } from "@/contexts/ChatContext";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp, Mic, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 const API_STORAGE_KEY = "ios_msg_history_api";
 const API_SESSION_STORAGE_KEY = "ios_msg_history_api_session";
-const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
+const API_BASE = String(import.meta.env.VITE_API_BASE || "")
+  .trim()
+  .replace(/\/+$/, "");
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 const KEYBOARD_OPEN_THRESHOLD = 72;
 const TERMINAL_DIGITS_PATTERN = /^\d+$/;
 const MAX_PERSISTED_API_MESSAGES = 140;
 const STORAGE_WRITE_DEBOUNCE_MS = 180;
+const DEFAULT_KEYBOARD_MAX_OFFSET = 360;
+const ACTION_MENU_WIDTH = 230;
+const ACTION_MENU_HEIGHT = 132;
+
+const runWhenIdle = (task: () => void): (() => void) => {
+  const win = window as Window & {
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+    cancelIdleCallback?: (handle: number) => void;
+  };
+
+  if (typeof win.requestIdleCallback === "function") {
+    const id = win.requestIdleCallback(task, { timeout: 800 });
+    return () => win.cancelIdleCallback?.(id);
+  }
+
+  const timeoutId = window.setTimeout(task, 0);
+  return () => window.clearTimeout(timeoutId);
+};
+
+const isIOSDevice = () => {
+  if (typeof navigator === "undefined") return false;
+
+  const userAgent = navigator.userAgent || "";
+  const iOSUa = /iPhone|iPad|iPod/i.test(userAgent);
+  const iPadDesktopMode = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return iOSUa || iPadDesktopMode;
+};
 
 const restoreApiMessages = (): ChatMessage[] => {
   const sessionSaved = sessionStorage.getItem(API_SESSION_STORAGE_KEY);
@@ -69,9 +101,16 @@ async function fetchWithRetry(
 }
 
 export default function Chat() {
-  const { settings, messages, sendMessage } = useChat();
+  const { settings, messages, sendMessage, deleteMessage } = useChat();
   const [inputCode, setInputCode] = useState("");
   const [apiMessages, setApiMessages] = useState<ChatMessage[]>(restoreApiMessages);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [actionMenu, setActionMenu] = useState<{
+    id: string;
+    text: string;
+    x: number;
+    y: number;
+  } | null>(null);
   // MODIFIED BY AI: 2026-02-12 - keep composer visible above mobile keyboard while preserving old visual style
   // FILE: client/src/pages/Chat.tsx
   const [keyboardOffset, setKeyboardOffset] = useState(0);
@@ -79,6 +118,8 @@ export default function Chat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isIOSRef = useRef(isIOSDevice());
+  const lastSerializedApiMessagesRef = useRef("");
 
   const mode =
     new URLSearchParams(window.location.search).get("mode") === "api"
@@ -147,18 +188,34 @@ export default function Chat() {
   useEffect(() => {
     if (mode !== "api") return;
     const trimmedMessages = apiMessages.slice(-MAX_PERSISTED_API_MESSAGES);
-    sessionStorage.setItem(API_SESSION_STORAGE_KEY, JSON.stringify(trimmedMessages));
+    const serialized = JSON.stringify(trimmedMessages);
 
+    if (lastSerializedApiMessagesRef.current === serialized) {
+      return;
+    }
+
+    lastSerializedApiMessagesRef.current = serialized;
+    sessionStorage.setItem(API_SESSION_STORAGE_KEY, serialized);
+
+    let cancelIdle = () => {};
     const timer = window.setTimeout(() => {
-      localStorage.setItem(API_STORAGE_KEY, JSON.stringify(trimmedMessages));
+      cancelIdle = runWhenIdle(() => {
+        localStorage.setItem(API_STORAGE_KEY, serialized);
+      });
     }, STORAGE_WRITE_DEBOUNCE_MS);
 
     return () => {
       window.clearTimeout(timer);
+      cancelIdle();
     };
   }, [apiMessages, mode]);
 
   useEffect(() => {
+    if (isIOSRef.current) {
+      setKeyboardOffset(0);
+      return;
+    }
+
     const viewport = window.visualViewport;
     if (!viewport) return;
 
@@ -168,8 +225,14 @@ export default function Chat() {
         return;
       }
 
-      const rawOffset = window.innerHeight - viewport.height - viewport.offsetTop;
-      const nextOffset = rawOffset > KEYBOARD_OPEN_THRESHOLD ? Math.round(rawOffset) : 0;
+      const visibleHeight = Math.round(viewport.height + viewport.offsetTop);
+      const rawOffset = Math.max(0, Math.round(window.innerHeight - visibleHeight));
+      const maxOffset = DEFAULT_KEYBOARD_MAX_OFFSET;
+      const nextOffset =
+        rawOffset > KEYBOARD_OPEN_THRESHOLD
+          ? Math.max(0, Math.min(Math.round(rawOffset), maxOffset))
+          : 0;
+
       setKeyboardOffset(nextOffset);
     };
 
@@ -195,6 +258,24 @@ export default function Chat() {
     }
   }, [keyboardOffset]);
 
+  useEffect(() => {
+    if (!actionMenu) return;
+
+    const handleGlobalClose = () => {
+      closeActionMenu();
+    };
+
+    window.addEventListener("resize", handleGlobalClose);
+    window.addEventListener("scroll", handleGlobalClose, true);
+    window.addEventListener("orientationchange", handleGlobalClose);
+
+    return () => {
+      window.removeEventListener("resize", handleGlobalClose);
+      window.removeEventListener("scroll", handleGlobalClose, true);
+      window.removeEventListener("orientationchange", handleGlobalClose);
+    };
+  }, [actionMenu]);
+
   const appendApi = (msg: ChatMessage) => {
     setApiMessages((prev) => {
       const next = [...prev, msg];
@@ -202,6 +283,80 @@ export default function Chat() {
         ? next.slice(-MAX_PERSISTED_API_MESSAGES)
         : next;
     });
+  };
+
+  const closeActionMenu = () => {
+    setActionMenu(null);
+  };
+
+  const openActionMenu = (payload: {
+    id: string;
+    text: string;
+    rect: DOMRect;
+  }) => {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    const left = Math.max(
+      12,
+      Math.min(
+        Math.round(payload.rect.left + payload.rect.width / 2 - ACTION_MENU_WIDTH / 2),
+        viewportWidth - ACTION_MENU_WIDTH - 12,
+      ),
+    );
+
+    const preferredTop = Math.round(payload.rect.top - ACTION_MENU_HEIGHT - 12);
+    const top =
+      preferredTop > 76
+        ? preferredTop
+        : Math.min(
+            viewportHeight - ACTION_MENU_HEIGHT - 16,
+            Math.round(payload.rect.bottom + 12),
+          );
+
+    setActionMenu({
+      id: payload.id,
+      text: payload.text,
+      x: left,
+      y: Math.max(14, top),
+    });
+  };
+
+  const handleCopyMessage = async () => {
+    if (!actionMenu) return;
+
+    try {
+      await navigator.clipboard.writeText(actionMenu.text);
+      toast.success("Скопировано");
+    } catch {
+      toast.error("Не удалось скопировать сообщение");
+    } finally {
+      closeActionMenu();
+    }
+  };
+
+  const handleDeleteMessage = () => {
+    if (!actionMenu) return;
+
+    if (mode === "api") {
+      setApiMessages((prev) => prev.filter((message) => message.id !== actionMenu.id));
+    } else {
+      deleteMessage(actionMenu.id);
+    }
+
+    toast.success("Сообщение удалено");
+    closeActionMenu();
+  };
+
+  const handleTerminalDetected = (terminalId: string) => {
+    setInputCode(terminalId);
+    toast.success("QR распознан", {
+      description: `Terminal ID: ${terminalId}`,
+    });
+
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 60);
   };
 
   const handleSend = async (event?: React.FormEvent) => {
@@ -340,11 +495,17 @@ export default function Chat() {
         {(mode === "api" ? apiMessages : messages).map((msg) => (
           <MessageBubble
             key={msg.id}
+            id={msg.id}
             text={msg.text}
             isMe={msg.isMe}
             timestamp={msg.timestamp}
             showTimestamp={msg.isMe}
+            isSelected={actionMenu?.id === msg.id}
+            isDimmed={Boolean(actionMenu)}
             details={msg.details}
+            onOpenActions={({ id, text, rect }) => {
+              openActionMenu({ id, text, rect });
+            }}
           />
         ))}
         <div ref={messagesEndRef} />
@@ -352,13 +513,14 @@ export default function Chat() {
 
       <div
         className="fixed left-0 right-0 z-50 safe-area-bottom"
-        style={{ bottom: keyboardOffset + 30 }}
+        style={{ bottom: isIOSRef.current ? 10 : keyboardOffset + 30 }}
       >
         <div className="mx-auto flex w-full max-w-md items-end gap-1.5 px-2.5 pb-1.5">
           <button
             type="button"
             className="mb-0.5 flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full border border-white/18 bg-[#2b2c31] text-white shadow-[0_4px_12px_rgba(0,0,0,0.27)] transition-colors hover:bg-[#34353b]"
             aria-label="Добавить"
+            onClick={() => setIsScannerOpen(true)}
           >
             <Plus size={21} strokeWidth={2.2} />
           </button>
@@ -412,6 +574,56 @@ export default function Chat() {
           </form>
         </div>
       </div>
+
+      <QrScannerSheet
+        open={isScannerOpen}
+        onOpenChange={setIsScannerOpen}
+        onDetected={handleTerminalDetected}
+      />
+
+      <AnimatePresence>
+        {actionMenu && (
+          <>
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="fixed inset-0 z-[120] bg-black/18 backdrop-blur-[1px]"
+              onClick={closeActionMenu}
+              aria-label="Закрыть меню"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
+              className="fixed z-[121] w-[230px] overflow-hidden rounded-[22px] border border-white/14 bg-[#151820]/95 p-1.5 shadow-[0_20px_45px_rgba(0,0,0,0.46)] backdrop-blur-xl"
+              style={{ left: actionMenu.x, top: actionMenu.y }}
+            >
+              <button
+                type="button"
+                className="flex w-full items-center rounded-[14px] px-3 py-2.5 text-left text-[17px] font-medium text-[#f2f4fa] transition-colors hover:bg-white/8"
+                onClick={handleCopyMessage}
+              >
+                Скопировать
+              </button>
+
+              <div className="my-1 h-px bg-white/10" />
+
+              <button
+                type="button"
+                className="flex w-full items-center rounded-[14px] px-3 py-2.5 text-left text-[17px] font-medium text-[#ff8585] transition-colors hover:bg-white/8"
+                onClick={handleDeleteMessage}
+              >
+                Удалить
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
