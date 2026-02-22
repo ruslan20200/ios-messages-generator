@@ -3,6 +3,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { useChat } from "@/contexts/ChatContext";
 import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
@@ -54,7 +55,7 @@ async function fetchWithRetry(
 }
 
 export default function Home() {
-  const { settings, updateSettings, clearHistory } = useChat();
+  const { settings, updateSettings, setAutoScanEnabled, clearHistory } = useChat();
   const [route, setRoute] = useState(settings.route || "244");
   const [number, setNumber] = useState(settings.number || "521AV05");
   const [price, setPrice] = useState(settings.price || "120₸");
@@ -68,6 +69,7 @@ export default function Home() {
   } | null>(null);
   const [isOnayPanelOpen, setIsOnayPanelOpen] = useState(false);
   const [, setLocation] = useLocation();
+  const autoScanEnabled = settings.autoScan === true;
 
   const formatCost = (cost?: number | null) => {
     if (typeof cost === "number") {
@@ -188,6 +190,22 @@ export default function Home() {
             >
               Открыть
             </Button>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-[#11141d]/80 px-3 py-2.5">
+            <div className="pr-3">
+              <div className="text-sm font-medium text-gray-100">Авто сканирование</div>
+              <div className="text-xs text-gray-400">
+                После QR-кода терминал подставится и отправится сразу
+              </div>
+            </div>
+            <Switch
+              checked={autoScanEnabled}
+              onCheckedChange={setAutoScanEnabled}
+              aria-label="Переключить авто сканирование"
+              className="h-8 w-[56px] border border-white/15 bg-[#2b2f3b] shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] data-[state=checked]:bg-ios-blue data-[state=checked]:shadow-[0_0_0_1px_rgba(10,132,255,0.35)] data-[state=unchecked]:bg-[#2b2f3b]"
+              thumbClassName="size-7 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.35)] data-[state=checked]:translate-x-[calc(100%-5px)] data-[state=unchecked]:translate-x-[1px]"
+            />
           </div>
         </motion.section>
 

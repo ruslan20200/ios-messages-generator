@@ -348,20 +348,8 @@ export default function Chat() {
     closeActionMenu();
   };
 
-  const handleTerminalDetected = (terminalId: string) => {
-    setInputCode(terminalId);
-    toast.success("QR распознан", {
-      description: `Terminal ID: ${terminalId}`,
-    });
-
-    window.setTimeout(() => {
-      inputRef.current?.focus();
-    }, 60);
-  };
-
-  const handleSend = async (event?: React.FormEvent) => {
-    event?.preventDefault();
-    const text = inputCode.trim();
+  const handleSendText = async (rawText: string) => {
+    const text = rawText.trim();
     if (!text) return;
 
     if (mode === "manual") {
@@ -478,6 +466,31 @@ export default function Chat() {
         inputRef.current?.focus();
       }, 10);
     }
+  };
+
+  const handleTerminalDetected = (terminalId: string) => {
+    setInputCode(terminalId);
+
+    const autoSendEnabled = mode === "api" && settings.autoScan === true;
+    toast.success("QR распознан", {
+      description: autoSendEnabled
+        ? `Terminal ID: ${terminalId}. Отправляем автоматически...`
+        : `Terminal ID: ${terminalId}`,
+    });
+
+    if (autoSendEnabled) {
+      void handleSendText(terminalId);
+      return;
+    }
+
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 60);
+  };
+
+  const handleSend = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    await handleSendText(inputCode);
   };
 
   return (

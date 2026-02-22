@@ -20,12 +20,14 @@ interface ChatSettings {
   route: string;
   number: string;
   price: string;
+  autoScan: boolean;
 }
 
 interface ChatContextType {
   settings: ChatSettings;
   messages: Message[];
   updateSettings: (route: string, number: string, price?: string) => void;
+  setAutoScanEnabled: (enabled: boolean) => void;
   sendMessage: (code: string) => void;
   deleteMessage: (id: string) => void;
   clearHistory: () => void;
@@ -77,7 +79,7 @@ const restoreManualMessages = (): Message[] => {
 };
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const defaultSettings: ChatSettings = { route: "", number: "", price: "120₸" };
+  const defaultSettings: ChatSettings = { route: "", number: "", price: "120₸", autoScan: false };
 
   const [settings, setSettings] = useState<ChatSettings>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
@@ -87,6 +89,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         route: parsed.route || "",
         number: parsed.number || "",
         price: parsed.price || "120₸",
+        autoScan: parsed.autoScan === true,
       };
     }
     return defaultSettings;
@@ -124,7 +127,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [messages]);
 
   const updateSettings = (route: string, number: string, price?: string) => {
-    setSettings({ route, number, price: price || settings.price || "120₸" });
+    setSettings((prev) => ({
+      ...prev,
+      route,
+      number,
+      price: price || prev.price || "120₸",
+    }));
+  };
+
+  const setAutoScanEnabled = (enabled: boolean) => {
+    setSettings((prev) => ({
+      ...prev,
+      autoScan: enabled,
+    }));
   };
 
   const generateSuffix = () => {
@@ -194,7 +209,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ChatContext.Provider
-      value={{ settings, messages, updateSettings, sendMessage, deleteMessage, clearHistory }}
+      value={{
+        settings,
+        messages,
+        updateSettings,
+        setAutoScanEnabled,
+        sendMessage,
+        deleteMessage,
+        clearHistory,
+      }}
     >
       {children}
     </ChatContext.Provider>
