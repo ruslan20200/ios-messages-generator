@@ -65,9 +65,11 @@ const normalizePlate = (plate: unknown): string | undefined => {
   return plate.replace(/^\s*\([^)]*\)\s*/, "").trim();
 };
 
-export function loadOnayConfig(): OnayConfig {
-  const required = (key: string) => {
-    const value = process.env[key];
+export function loadOnayConfig(
+  overrides: Partial<Pick<OnayConfig, "phoneNumber" | "password">> = {},
+): OnayConfig {
+  const required = (key: string, fallback?: string) => {
+    const value = fallback || process.env[key];
     if (!value) {
       throw new Error(`Missing required env ${key} for Onay API`);
     }
@@ -83,8 +85,8 @@ export function loadOnayConfig(): OnayConfig {
     userAgent:
       process.env.ONAY_USER_AGENT ||
       "Onay/3.2.1 (kz.onay.Onay; build:6; iOS 26.2.0) Alamofire/5.4.4",
-    phoneNumber: required("ONAY_PHONE_NUMBER"),
-    password: required("ONAY_PASSWORD"),
+    phoneNumber: required("ONAY_PHONE_NUMBER", overrides.phoneNumber),
+    password: required("ONAY_PASSWORD", overrides.password),
     pushToken: required("ONAY_PUSH_TOKEN"),
     cityId: process.env.ONAY_CITY_ID || "1",
     verbose: process.env.ONAY_VERBOSE_LOGS === "true",

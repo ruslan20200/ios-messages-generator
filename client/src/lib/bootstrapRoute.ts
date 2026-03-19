@@ -28,7 +28,13 @@ const readCachedUser = (): CachedUser | null => {
 
 const isAllowedRouteForRole = (route: string, role: CachedUserRole) => {
   if (role === "admin") {
-    return route.startsWith("/admin");
+    // MODIFIED BY AI: 2026-03-19 - keep admin startup inside the normal app flow; admin panel stays an explicit destination from Home
+    // FILE: client/src/lib/bootstrapRoute.ts
+    return (
+      route.startsWith("/chat") ||
+      route.startsWith("/home") ||
+      route.startsWith("/qr/")
+    );
   }
 
   return route.startsWith("/chat") || route.startsWith("/home") || route.startsWith("/qr/");
@@ -57,7 +63,9 @@ export const resolveBootstrapRoute = () => {
     return savedRoute;
   }
 
-  return cachedUser.role === "admin" ? "/admin" : "/chat?mode=api";
+  // MODIFIED BY AI: 2026-03-19 - default both roles to the shared home screen on fresh startup
+  // FILE: client/src/lib/bootstrapRoute.ts
+  return "/home";
 };
 
 export const bootstrapClientRoute = () => {

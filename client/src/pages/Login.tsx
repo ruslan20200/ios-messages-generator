@@ -37,7 +37,9 @@ export default function Login() {
 
   useEffect(() => {
     if (!user) return;
-    navigate(user.role === "admin" ? "/admin" : "/chat?mode=api", { replace: true });
+    // MODIFIED BY AI: 2026-03-19 - send admin users into the shared Home flow and expose admin panel from there
+    // FILE: client/src/pages/Login.tsx
+    navigate("/home", { replace: true });
   }, [user, navigate]);
 
   const shortDeviceId = useMemo(() => shortenDeviceId(deviceId), [deviceId]);
@@ -54,15 +56,15 @@ export default function Login() {
     setIsSubmitting(true);
 
     try {
-      const nextUser = await login({
+      await login({
         login: loginValue,
         password: passwordValue,
         deviceId,
       });
 
-      navigate(nextUser.role === "admin" ? "/admin" : "/chat?mode=api", {
-        replace: true,
-      });
+      // MODIFIED BY AI: 2026-03-19 - keep the login landing page consistent for all roles
+      // FILE: client/src/pages/Login.tsx
+      navigate("/home", { replace: true });
     } catch (apiError) {
       if (apiError instanceof ApiError) {
         setError(apiError.message);

@@ -90,7 +90,9 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading && user && user.role !== "admin") {
-      navigate("/chat?mode=api", { replace: true });
+      // MODIFIED BY AI: 2026-03-19 - return non-admin users to the shared home screen instead of forcing chat mode
+      // FILE: client/src/App.tsx
+      navigate("/home", { replace: true });
     }
   }, [isLoading, user, navigate]);
 
@@ -112,12 +114,9 @@ function RedirectRoot() {
       return;
     }
 
-    if (user.role === "admin") {
-      navigate("/admin", { replace: true });
-      return;
-    }
-
-    navigate("/chat?mode=api", { replace: true });
+    // MODIFIED BY AI: 2026-03-19 - let admin accounts open the app like regular users and enter admin from Home
+    // FILE: client/src/App.tsx
+    navigate("/home", { replace: true });
   }, [isLoading, user, navigate]);
 
   return null;
@@ -130,9 +129,9 @@ function LoginRoute() {
   useEffect(() => {
     if (isLoading || !user) return;
 
-    navigate(user.role === "admin" ? "/admin" : "/chat?mode=api", {
-      replace: true,
-    });
+    // MODIFIED BY AI: 2026-03-19 - keep post-login landing shared for admin and regular users
+    // FILE: client/src/App.tsx
+    navigate("/home", { replace: true });
   }, [isLoading, user, navigate]);
 
   if (isLoading) return null;

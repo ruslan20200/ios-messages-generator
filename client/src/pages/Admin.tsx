@@ -1,11 +1,20 @@
 // MODIFIED BY AI: 2026-02-13 - redesign admin panel with elastic iOS styling, adaptive layout and smooth motion
 // FILE: client/src/pages/Admin.tsx
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth, type AuthUser } from "@/contexts/AuthContext";
 import { apiRequest, apiRequestWithMeta, ApiError } from "@/lib/api";
 import { AnimatePresence, motion } from "framer-motion";
-import { Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, ChevronDown, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useLocation } from "wouter";
 
 type SessionItem = {
@@ -42,6 +51,8 @@ type OnaySignInResponse = {
     token: string;
     shortToken: string;
     deviceId: string;
+    source?: "env" | "admin";
+    phoneNumberMasked?: string;
   };
   message?: string;
 };
@@ -61,6 +72,34 @@ type OnayQrStartResponse = {
 type OnayLatencyEndpoint = "sign-in" | "qr-start";
 type CreateUserTerm = "1w" | "1m" | "3m" | "6m" | "permanent";
 type ExtendUserTerm = "1m" | "3m" | "6m" | "permanent";
+type OnayAccount = {
+  source: "env" | "admin";
+  phoneNumberMasked: string;
+  updatedAt: string | null;
+  updatedByLogin: string | null;
+};
+
+type OnayAccountResponse = {
+  success: boolean;
+  data: {
+    account: OnayAccount;
+  };
+};
+
+type OnaySaveAccountResponse = {
+  success: boolean;
+  data?: {
+    account: OnayAccount;
+    tokens: NonNullable<OnaySignInResponse["data"]>;
+  };
+};
+
+type CleanupSessionsResponse = {
+  success: boolean;
+  data: {
+    deletedCount: number;
+  };
+};
 
 const formatDate = (value: string | null) => {
   if (!value) return "Permanent";
@@ -113,7 +152,7 @@ const SWIPE_OPEN_THRESHOLD = 48;
 const SWIPE_CLOSE_THRESHOLD = 32;
 
 export default function Admin() {
-  const { user, token, logout } = useAuth();
+  const { user, token } = useAuth();
   const [, navigate] = useLocation();
 
   const [users, setUsers] = useState<AuthUser[]>([]);
@@ -132,12 +171,15 @@ export default function Admin() {
   const [sessionsUpdatedAt, setSessionsUpdatedAt] = useState<Date | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [isLoadingOnayAccount, setIsLoadingOnayAccount] = useState(false);
   const [isAutoRefreshEnabled, setIsAutoRefreshEnabled] = useState(true);
   const [isPageVisible, setIsPageVisible] = useState(
     typeof document === "undefined" ? true : !document.hidden,
   );
   const [swipedUserId, setSwipedUserId] = useState<number | null>(null);
   const swipeStartXRef = useRef<Record<number, number>>({});
+  const [busyActionKey, setBusyActionKey] = useState<string | null>(null);
+  const [busyActionLabel, setBusyActionLabel] = useState("");
 
   const [newLogin, setNewLogin] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -151,8 +193,19 @@ export default function Admin() {
   const [onayTerminal, setOnayTerminal] = useState("");
   const [onayBusy, setOnayBusy] = useState(false);
   const [onayError, setOnayError] = useState("");
+  const [onayBusyActionKey, setOnayBusyActionKey] = useState<string | null>(null);
+  const [onayBusyLabel, setOnayBusyLabel] = useState("");
+  const [isOnayToolsOpen, setIsOnayToolsOpen] = useState(false);
   const [onayTokens, setOnayTokens] = useState<OnaySignInResponse["data"] | null>(null);
   const [onayTrip, setOnayTrip] = useState<OnayQrStartResponse["data"] | null>(null);
+  const [onayAccount, setOnayAccount] = useState<OnayAccount | null>(null);
+  const [showOnayAccountDialog, setShowOnayAccountDialog] = useState(false);
+  const [showOnayRefreshConfirm, setShowOnayRefreshConfirm] = useState(false);
+  const [showOnayPassword, setShowOnayPassword] = useState(false);
+  const [showResetOnayAccountConfirm, setShowResetOnayAccountConfirm] = useState(false);
+  const [showCleanupClosedConfirm, setShowCleanupClosedConfirm] = useState(false);
+  const [onayPhoneNumber, setOnayPhoneNumber] = useState("");
+  const [onayPassword, setOnayPassword] = useState("");
   // MODIFIED BY AI: 2026-02-12 - track server latency header for Onay requests (last + average)
   // FILE: client/src/pages/Admin.tsx
   const [onayLastLatencyMs, setOnayLastLatencyMs] = useState<number | null>(null);
@@ -168,7 +221,9 @@ export default function Admin() {
     }
 
     if (user.role !== "admin") {
-      navigate("/chat?mode=api", { replace: true });
+      // MODIFIED BY AI: 2026-03-19 - keep non-admin users inside the shared Home flow if they reach /admin
+      // FILE: client/src/pages/Admin.tsx
+      navigate("/home", { replace: true });
     }
   }, [user, navigate]);
 
@@ -194,12 +249,22 @@ export default function Admin() {
     }
   }, [token]);
 
+  const loadOnayAccount = useCallback(async () => {
+    setIsLoadingOnayAccount(true);
+    try {
+      const response = await apiRequest<OnayAccountResponse>("/admin/onay/account", { token });
+      setOnayAccount(response.data.account);
+    } finally {
+      setIsLoadingOnayAccount(false);
+    }
+  }, [token]);
+
   const loadAll = useCallback(async () => {
     setIsLoading(true);
     setError("");
 
     try {
-      await Promise.all([loadUsers(), loadSessions()]);
+      await Promise.all([loadUsers(), loadSessions(), loadOnayAccount()]);
     } catch (apiError) {
       if (apiError instanceof ApiError) {
         setError(apiError.message);
@@ -209,7 +274,7 @@ export default function Admin() {
     } finally {
       setIsLoading(false);
     }
-  }, [loadUsers, loadSessions]);
+  }, [loadOnayAccount, loadUsers, loadSessions]);
 
   useEffect(() => {
     if (!user || user.role !== "admin") return;
@@ -246,13 +311,37 @@ export default function Admin() {
     return sessions.filter((session) => session.login.toLowerCase().includes(q));
   }, [sessions, sessionLoginFilter]);
 
-  const runAction = async (action: () => Promise<void>) => {
+  const closedSessionsCount = useMemo(
+    () => sessions.filter((session) => !session.isActive).length,
+    [sessions],
+  );
+
+  const runAction = async (params: {
+    action: () => Promise<void>;
+    busyKey: string;
+    busyLabel: string;
+    successMessage?: string;
+    reload?: "all" | "users" | "sessions" | "none";
+  }) => {
     setIsBusy(true);
+    setBusyActionKey(params.busyKey);
+    setBusyActionLabel(params.busyLabel);
     setError("");
 
     try {
-      await action();
-      await Promise.all([loadUsers(), loadSessions()]);
+      await params.action();
+
+      if (params.reload === "users") {
+        await loadUsers();
+      } else if (params.reload === "sessions") {
+        await loadSessions();
+      } else if (params.reload !== "none") {
+        await Promise.all([loadUsers(), loadSessions()]);
+      }
+
+      if (params.successMessage) {
+        toast.success(params.successMessage);
+      }
     } catch (apiError) {
       if (apiError instanceof ApiError) {
         setError(apiError.message);
@@ -261,8 +350,12 @@ export default function Admin() {
       }
     } finally {
       setIsBusy(false);
+      setBusyActionKey(null);
+      setBusyActionLabel("");
     }
   };
+
+  const isPendingAction = (key: string) => isBusy && busyActionKey === key;
 
   const handleCreateUser = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -277,44 +370,61 @@ export default function Admin() {
         ? null
         : toFutureIsoByTerm(newTerm);
 
-    await runAction(async () => {
-      await apiRequest("/admin/users", {
-        method: "POST",
-        token,
-        body: JSON.stringify({
-          login: newLogin,
-          password: newPassword,
-          role: newRole,
-          expires_at: expiresAt,
-        }),
-      });
+    await runAction({
+      busyKey: "create-user",
+      busyLabel: `Creating user ${newLogin.trim()}...`,
+      successMessage: `User ${newLogin.trim()} created`,
+      action: async () => {
+        await apiRequest("/admin/users", {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            login: newLogin,
+            password: newPassword,
+            role: newRole,
+            expires_at: expiresAt,
+          }),
+        });
 
-      setNewLogin("");
-      setNewPassword("");
-      setShowCreatePassword(false);
-      setNewRole("user");
-      setNewTerm("1m");
-      setShowCreateForm(false);
+        setNewLogin("");
+        setNewPassword("");
+        setShowCreatePassword(false);
+        setNewRole("user");
+        setNewTerm("1m");
+        setShowCreateForm(false);
+      },
     });
   };
 
   const resetDevice = async (targetUserId: number) => {
-    await runAction(async () => {
-      await apiRequest(`/admin/users/${targetUserId}/reset-device`, {
-        method: "POST",
-        token,
-      });
+    const entry = users.find((item) => item.id === targetUserId);
+    await runAction({
+      busyKey: `user:${targetUserId}:reset`,
+      busyLabel: `Resetting device for ${entry?.login || "user"}...`,
+      successMessage: `Device reset for ${entry?.login || "user"}`,
+      action: async () => {
+        await apiRequest(`/admin/users/${targetUserId}/reset-device`, {
+          method: "POST",
+          token,
+        });
+      },
     });
   };
 
   const deleteUser = async (targetUserId: number) => {
     if (!window.confirm("Delete user and all related sessions?")) return;
 
-    await runAction(async () => {
-      await apiRequest(`/admin/users/${targetUserId}`, {
-        method: "DELETE",
-        token,
-      });
+    const entry = users.find((item) => item.id === targetUserId);
+    await runAction({
+      busyKey: `user:${targetUserId}:delete`,
+      busyLabel: `Deleting ${entry?.login || "user"}...`,
+      successMessage: `User ${entry?.login || "user"} deleted`,
+      action: async () => {
+        await apiRequest(`/admin/users/${targetUserId}`, {
+          method: "DELETE",
+          token,
+        });
+      },
     });
   };
 
@@ -323,13 +433,22 @@ export default function Admin() {
       mode === "permanent"
         ? { permanent: true }
         : { months: mode === "1m" ? 1 : mode === "3m" ? 3 : 6 };
+    const entry = users.find((item) => item.id === targetUserId);
 
-    await runAction(async () => {
-      await apiRequest(`/admin/users/${targetUserId}/extend`, {
-        method: "POST",
-        token,
-        body: JSON.stringify(payload),
-      });
+    await runAction({
+      busyKey: `user:${targetUserId}:extend:${mode}`,
+      busyLabel: `Updating ${entry?.login || "user"}...`,
+      successMessage:
+        mode === "permanent"
+          ? `${entry?.login || "User"} is now permanent`
+          : `${entry?.login || "User"} extended by ${mode === "1m" ? "1 month" : mode === "3m" ? "3 months" : "6 months"}`,
+      action: async () => {
+        await apiRequest(`/admin/users/${targetUserId}/extend`, {
+          method: "POST",
+          token,
+          body: JSON.stringify(payload),
+        });
+      },
     });
   };
 
@@ -337,25 +456,20 @@ export default function Admin() {
   // FILE: client/src/pages/Admin.tsx
   const deleteSession = async (sessionId: number) => {
     if (!window.confirm("Delete this session log?")) return;
+    const session = sessions.find((entry) => entry.id === sessionId);
 
-    setIsBusy(true);
-    setError("");
-
-    try {
-      await apiRequest(`/admin/sessions/${sessionId}`, {
-        method: "DELETE",
-        token,
-      });
-      await refreshSessions();
-    } catch (apiError) {
-      if (apiError instanceof ApiError) {
-        setError(apiError.message);
-      } else {
-        setError("Failed to delete session");
-      }
-    } finally {
-      setIsBusy(false);
-    }
+    await runAction({
+      busyKey: `session:${sessionId}:delete`,
+      busyLabel: `Deleting session for ${session?.login || "user"}...`,
+      successMessage: "Session log deleted",
+      reload: "sessions",
+      action: async () => {
+        await apiRequest(`/admin/sessions/${sessionId}`, {
+          method: "DELETE",
+          token,
+        });
+      },
+    });
   };
 
   const cleanupExpired = async (mode: "deactivate" | "delete") => {
@@ -366,32 +480,60 @@ export default function Admin() {
 
     if (!confirmed) return;
 
-    await runAction(async () => {
-      await apiRequest("/admin/cleanup-expired", {
-        method: "POST",
-        token,
-        body: JSON.stringify({ mode }),
-      });
+    await runAction({
+      busyKey: `cleanup-expired:${mode}`,
+      busyLabel: mode === "delete" ? "Deleting expired users..." : "Deactivating expired users...",
+      successMessage: mode === "delete" ? "Expired users deleted" : "Expired users deactivated",
+      action: async () => {
+        await apiRequest("/admin/cleanup-expired", {
+          method: "POST",
+          token,
+          body: JSON.stringify({ mode }),
+        });
+      },
     });
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigate("/login", { replace: true });
+  const cleanupClosedSessions = async () => {
+    await runAction({
+      busyKey: "sessions:cleanup-closed",
+      busyLabel: "Cleaning up closed sessions...",
+      reload: "sessions",
+      action: async () => {
+        const response = await apiRequest<CleanupSessionsResponse>("/admin/sessions/cleanup", {
+          method: "POST",
+          token,
+          body: JSON.stringify({ scope: "closed" }),
+        });
+        toast.success(`Closed sessions removed: ${response.data.deletedCount}`);
+      },
+    });
   };
 
   const runOnayAction = async (
-    endpoint: OnayLatencyEndpoint,
-    action: () => Promise<void>,
+    params: {
+      action: () => Promise<void>;
+      endpoint?: OnayLatencyEndpoint;
+      busyKey: string;
+      busyLabel: string;
+      successMessage?: string;
+    },
   ) => {
     setOnayBusy(true);
+    setOnayBusyActionKey(params.busyKey);
+    setOnayBusyLabel(params.busyLabel);
     setOnayError("");
 
     try {
-      await action();
+      await params.action();
+      if (params.successMessage) {
+        toast.success(params.successMessage);
+      }
     } catch (apiError) {
       if (apiError instanceof ApiError) {
-        recordOnayLatency(apiError.headers, endpoint);
+        if (params.endpoint) {
+          recordOnayLatency(apiError.headers, params.endpoint);
+        }
         setOnayError(apiError.message);
       } else if (apiError instanceof Error) {
         setOnayError(apiError.message);
@@ -400,6 +542,8 @@ export default function Admin() {
       }
     } finally {
       setOnayBusy(false);
+      setOnayBusyActionKey(null);
+      setOnayBusyLabel("");
     }
   };
 
@@ -427,18 +571,36 @@ export default function Admin() {
   }, [onayLatencySamples]);
 
   const handleOnaySignIn = async () => {
-    await runOnayAction("sign-in", async () => {
-      const response = await apiRequestWithMeta<OnaySignInResponse>("/api/onay/sign-in", {
-        method: "POST",
-        token,
-      });
-      recordOnayLatency(response.headers, "sign-in");
+    setShowOnayRefreshConfirm(false);
+    await runOnayAction({
+      endpoint: "sign-in",
+      busyKey: "onay:refresh",
+      busyLabel: "Refreshing Onay token bundle...",
+      successMessage: "Onay token bundle refreshed",
+      action: async () => {
+        const response = await apiRequestWithMeta<OnaySignInResponse>("/api/onay/sign-in", {
+          method: "POST",
+          token,
+        });
+        recordOnayLatency(response.headers, "sign-in");
 
-      if (!response.data.success || !response.data.data) {
-        throw new Error(response.data.message || "Onay sign-in failed");
-      }
+        if (!response.data.success || !response.data.data) {
+          throw new Error(response.data.message || "Onay sign-in failed");
+        }
 
-      setOnayTokens(response.data.data);
+        setOnayTokens(response.data.data);
+        if (response.data.data.source && response.data.data.phoneNumberMasked) {
+          setOnayAccount((prev) => ({
+            source: response.data.data?.source || prev?.source || "env",
+            phoneNumberMasked:
+              response.data.data?.phoneNumberMasked || prev?.phoneNumberMasked || "-",
+            updatedAt: prev?.updatedAt || null,
+            updatedByLogin: prev?.updatedByLogin || null,
+          }));
+        } else {
+          await loadOnayAccount();
+        }
+      },
     });
   };
 
@@ -451,19 +613,79 @@ export default function Admin() {
       return;
     }
 
-    await runOnayAction("qr-start", async () => {
-      const response = await apiRequestWithMeta<OnayQrStartResponse>("/api/onay/qr-start", {
-        method: "POST",
-        token,
-        body: JSON.stringify({ terminal: trimmedTerminal }),
-      });
-      recordOnayLatency(response.headers, "qr-start");
+    await runOnayAction({
+      endpoint: "qr-start",
+      busyKey: "onay:terminal",
+      busyLabel: `Checking terminal ${trimmedTerminal}...`,
+      successMessage: `Terminal ${trimmedTerminal} checked`,
+      action: async () => {
+        const response = await apiRequestWithMeta<OnayQrStartResponse>("/api/onay/qr-start", {
+          method: "POST",
+          token,
+          body: JSON.stringify({ terminal: trimmedTerminal }),
+        });
+        recordOnayLatency(response.headers, "qr-start");
 
-      if (!response.data.success || !response.data.data) {
-        throw new Error(response.data.message || "Terminal check failed");
-      }
+        if (!response.data.success || !response.data.data) {
+          throw new Error(response.data.message || "Terminal check failed");
+        }
 
-      setOnayTrip(response.data.data);
+        setOnayTrip(response.data.data);
+      },
+    });
+  };
+
+  const handleSaveOnayAccount = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!onayPhoneNumber.trim() || !onayPassword) {
+      setOnayError("Enter phone number and password");
+      return;
+    }
+
+    await runOnayAction({
+      busyKey: "onay:save-account",
+      busyLabel: "Saving and verifying new Onay account...",
+      successMessage: "New Onay account saved and activated",
+      action: async () => {
+        const response = await apiRequest<OnaySaveAccountResponse>("/admin/onay/account", {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            phoneNumber: onayPhoneNumber.trim(),
+            password: onayPassword,
+          }),
+        });
+
+        if (!response.success || !response.data) {
+          throw new Error("Failed to save Onay account");
+        }
+
+        setOnayAccount(response.data.account);
+        setOnayTokens(response.data.tokens);
+        setOnayPhoneNumber("");
+        setOnayPassword("");
+        setShowOnayPassword(false);
+        setShowOnayAccountDialog(false);
+      },
+    });
+  };
+
+  const handleResetOnayAccount = async () => {
+    setShowResetOnayAccountConfirm(false);
+    await runOnayAction({
+      busyKey: "onay:reset-account",
+      busyLabel: "Switching back to env Onay account...",
+      successMessage: "Onay account reset to env defaults",
+      action: async () => {
+        const response = await apiRequest<OnayAccountResponse>("/admin/onay/account", {
+          method: "DELETE",
+          token,
+        });
+
+        setOnayAccount(response.data.account);
+        setOnayTokens(null);
+      },
     });
   };
 
@@ -590,16 +812,17 @@ export default function Admin() {
           transition={{ duration: 0.35 }}
           className={`${glassCardClass} sticky top-2 z-20 p-4 space-y-3`}
         >
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Admin Panel</h1>
-              <p className="text-sm text-gray-400">Smooth iOS-style control center</p>
+              <p className="mt-1 text-sm text-gray-400">Smooth iOS-style control center</p>
             </div>
             <button
-              onClick={handleLogout}
-              className={`rounded-xl border border-white/20 px-3 py-2 text-sm bg-white/5 hover:bg-white/10 ${interactiveBtnClass}`}
+              onClick={() => navigate("/home")}
+              className={`inline-flex items-center gap-2 self-start rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-gray-200 hover:bg-white/10 ${interactiveBtnClass}`}
             >
-              Logout
+              <ArrowLeft className="size-4" />
+              Назад на главный экран
             </button>
           </div>
 
@@ -716,56 +939,139 @@ export default function Admin() {
           ) : null}
         </AnimatePresence>
 
+        <AnimatePresence initial={false}>
+          {busyActionLabel ? (
+            <motion.div
+              key={busyActionLabel}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              className="flex items-center gap-2 rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-50"
+            >
+              <LoaderCircle className="size-4 animate-spin" />
+              <span>{busyActionLabel}</span>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
+        <AnimatePresence initial={false}>
+          {onayBusyLabel ? (
+            <motion.div
+              key={onayBusyLabel}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              className="flex items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-50"
+            >
+              <LoaderCircle className="size-4 animate-spin" />
+              <span>{onayBusyLabel}</span>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, delay: 0.02 }}
           className={`${glassCardClass} p-4 space-y-3`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold">Onay Tools</h2>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Onay Tools</h2>
+              <p className="mt-1 text-xs text-gray-400">Аккаунт, refresh токена и проверка терминала.</p>
+            </div>
             <button
-              onClick={handleOnaySignIn}
-              disabled={onayBusy}
-              className={`rounded-lg bg-gradient-to-r from-[#0A84FF] to-[#2f9bff] px-3 py-2 text-xs font-semibold ${interactiveBtnClass}`}
+              type="button"
+              onClick={() => setIsOnayToolsOpen((prev) => !prev)}
+              className={`rounded-xl border border-white/15 bg-white/5 p-2.5 hover:bg-white/10 ${interactiveBtnClass}`}
+              aria-label={isOnayToolsOpen ? "Collapse Onay tools" : "Expand Onay tools"}
             >
-              Refresh token bundle
+              <ChevronDown
+                className={`size-5 transition-transform duration-200 ${isOnayToolsOpen ? "rotate-180" : "rotate-0"}`}
+              />
             </button>
           </div>
 
-          <p className="text-xs text-gray-400">
-            Test Onay endpoints directly from admin panel: <code>/api/onay/sign-in</code> and{" "}
-            <code>/api/onay/qr-start</code>.
-          </p>
+          <AnimatePresence initial={false}>
+            {isOnayToolsOpen ? (
+              <motion.div
+                key="onay-tools-body"
+                initial={{ opacity: 0, height: 0, y: -6 }}
+                animate={{ opacity: 1, height: "auto", y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -6 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                className="space-y-3 overflow-hidden"
+              >
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    onClick={() => setShowOnayAccountDialog(true)}
+                    disabled={onayBusy}
+                    className={`rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold hover:bg-white/10 ${interactiveBtnClass}`}
+                  >
+                    Change account
+                  </button>
+                  <button
+                    onClick={() => setShowOnayRefreshConfirm(true)}
+                    disabled={onayBusy}
+                    className={`rounded-lg bg-gradient-to-r from-[#0A84FF] to-[#2f9bff] px-3 py-2 text-xs font-semibold ${interactiveBtnClass}`}
+                  >
+                    {onayBusyActionKey === "onay:refresh" ? "Refreshing..." : "Refresh token bundle"}
+                  </button>
+                </div>
 
-          {/* MODIFIED BY AI: 2026-02-12 - show live Onay latency metrics from X-Onay-Latency-Ms header */}
-          {/* FILE: client/src/pages/Admin.tsx */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-xl border border-cyan-300/20 bg-cyan-500/10 p-3 text-xs text-cyan-100/90">
-            <div>
-              last latency:{" "}
-              <span className="font-semibold text-cyan-50">
-                {onayLastLatencyMs !== null ? `${onayLastLatencyMs} ms` : "-"}
-              </span>
+          <div className="rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(25,32,48,0.95),rgba(11,15,23,0.92))] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-white">Current Onay account</div>
+                <div className="text-xs text-gray-400">
+                  {onayAccount?.source === "admin"
+                    ? "Saved override from admin panel"
+                    : "Using Render env defaults"}
+                </div>
+              </div>
+              <div className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-100">
+                {isLoadingOnayAccount ? "Loading" : onayAccount?.source || "env"}
+              </div>
             </div>
-            <div>
-              average latency:{" "}
-              <span className="font-semibold text-cyan-50">
-                {onayAvgLatencyMs !== null ? `${onayAvgLatencyMs} ms` : "-"}
-              </span>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">Phone</div>
+                <div className="mt-1 text-sm font-medium text-white">
+                  {onayAccount?.phoneNumberMasked || "-"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">Updated</div>
+                <div className="mt-1 text-sm font-medium text-white">
+                  {onayAccount?.updatedAt ? formatDate(onayAccount.updatedAt) : "From env"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-2 sm:col-span-2">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">Changed by</div>
+                <div className="mt-1 text-sm font-medium text-white">
+                  {onayAccount?.updatedByLogin || "Render / env config"}
+                </div>
+              </div>
             </div>
-            <div>
-              samples:{" "}
-              <span className="font-semibold text-cyan-50">{onayLatencySamples.length}</span>
-            </div>
-            <div>
-              endpoint:{" "}
-              <span className="font-semibold text-cyan-50">{onayLastLatencyEndpoint || "-"}</span>
-            </div>
-            <div className="sm:col-span-2">
-              updated:{" "}
-              <span className="font-semibold text-cyan-50">
-                {onayLatencyUpdatedAt ? onayLatencyUpdatedAt.toLocaleTimeString() : "-"}
-              </span>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                onClick={() => setShowOnayAccountDialog(true)}
+                disabled={onayBusy}
+                className={`rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-xs font-semibold hover:bg-white/10 ${interactiveBtnClass}`}
+              >
+                Authorize new account
+              </button>
+              {onayAccount?.source === "admin" ? (
+                <button
+                  onClick={() => setShowResetOnayAccountConfirm(true)}
+                  disabled={onayBusy}
+                  className={`rounded-xl border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-500/15 ${interactiveBtnClass}`}
+                >
+                  Use env default
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -775,11 +1081,57 @@ export default function Admin() {
             </div>
           ) : null}
 
-          <div className="grid gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-gray-300">
-            <div className="text-sm font-semibold text-white">Sign-in result</div>
-            <div>deviceId: {onayTokens?.deviceId || "-"}</div>
-            <div>token: {onayTokens?.token ? maskToken(onayTokens.token) : "-"}</div>
-            <div>shortToken: {onayTokens?.shortToken ? maskToken(onayTokens.shortToken) : "-"}</div>
+          {/* MODIFIED BY AI: 2026-03-19 - move Sign-in result directly under the current account card and place latency beneath it */}
+          {/* FILE: client/src/pages/Admin.tsx */}
+          <div className="grid gap-3 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="grid gap-3">
+              <div className="grid gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-gray-300">
+                <div className="text-sm font-semibold text-white">Sign-in result</div>
+                <div>source: {onayTokens?.source || onayAccount?.source || "-"}</div>
+                <div>phone: {onayTokens?.phoneNumberMasked || onayAccount?.phoneNumberMasked || "-"}</div>
+                <div>deviceId: {onayTokens?.deviceId || "-"}</div>
+                <div>token: {onayTokens?.token ? maskToken(onayTokens.token) : "-"}</div>
+                <div>shortToken: {onayTokens?.shortToken ? maskToken(onayTokens.shortToken) : "-"}</div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-500/10 p-3 text-xs text-cyan-100/90">
+                <div>
+                  last latency:{" "}
+                  <span className="font-semibold text-cyan-50">
+                    {onayLastLatencyMs !== null ? `${onayLastLatencyMs} ms` : "-"}
+                  </span>
+                </div>
+                <div>
+                  average latency:{" "}
+                  <span className="font-semibold text-cyan-50">
+                    {onayAvgLatencyMs !== null ? `${onayAvgLatencyMs} ms` : "-"}
+                  </span>
+                </div>
+                <div>
+                  samples:{" "}
+                  <span className="font-semibold text-cyan-50">{onayLatencySamples.length}</span>
+                </div>
+                <div>
+                  endpoint:{" "}
+                  <span className="font-semibold text-cyan-50">{onayLastLatencyEndpoint || "-"}</span>
+                </div>
+                <div>
+                  updated:{" "}
+                  <span className="font-semibold text-cyan-50">
+                    {onayLatencyUpdatedAt ? onayLatencyUpdatedAt.toLocaleTimeString() : "-"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-1 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-gray-300">
+              <div className="text-sm font-semibold text-white">Terminal result</div>
+              <div>route: {onayTrip?.route || "-"}</div>
+              <div>plate: {onayTrip?.plate || "-"}</div>
+              <div>cost: {typeof onayTrip?.cost === "number" ? onayTrip.cost : "-"}</div>
+              <div>terminal: {onayTrip?.terminal || "-"}</div>
+              <div>pan: {onayTrip?.pan || "-"}</div>
+            </div>
           </div>
 
           <form onSubmit={handleOnayTerminalCheck} className="space-y-2">
@@ -796,20 +1148,118 @@ export default function Admin() {
                 disabled={onayBusy}
                 className={`rounded-xl border border-white/20 bg-white/5 px-3 py-2.5 text-sm hover:bg-white/10 ${interactiveBtnClass}`}
               >
-                Run
+                {onayBusyActionKey === "onay:terminal" ? "Running..." : "Run"}
               </button>
             </div>
           </form>
-
-          <div className="grid gap-1 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-gray-300">
-            <div className="text-sm font-semibold text-white">Terminal result</div>
-            <div>route: {onayTrip?.route || "-"}</div>
-            <div>plate: {onayTrip?.plate || "-"}</div>
-            <div>cost: {typeof onayTrip?.cost === "number" ? onayTrip.cost : "-"}</div>
-            <div>terminal: {onayTrip?.terminal || "-"}</div>
-            <div>pan: {onayTrip?.pan || "-"}</div>
-          </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </motion.section>
+
+        <Dialog open={showOnayAccountDialog} onOpenChange={setShowOnayAccountDialog}>
+          <DialogContent className="border-white/10 bg-[#0d1017] text-white sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Authorize new Onay account</DialogTitle>
+              <DialogDescription className="text-gray-400">Введите новый номер и пароль. Если вход пройдет успешно, этот аккаунт станет активным по умолчанию для refresh token bundle и terminal check.</DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSaveOnayAccount} className="space-y-3">
+              <input
+                value={onayPhoneNumber}
+                onChange={(event) => setOnayPhoneNumber(event.target.value)}
+                placeholder="+7707..."
+                className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 outline-none transition-colors focus:border-[#0A84FF]/70"
+              />
+              <div className="relative">
+                <input
+                  type={showOnayPassword ? "text" : "password"}
+                  value={onayPassword}
+                  onChange={(event) => setOnayPassword(event.target.value)}
+                  placeholder="Onay password"
+                  className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 pr-11 outline-none transition-colors focus:border-[#0A84FF]/70"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowOnayPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-white"
+                  aria-label={showOnayPassword ? "Hide password" : "Show password"}
+                >
+                  {showOnayPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+
+              <DialogFooter>
+                <button
+                  type="button"
+                  onClick={() => setShowOnayAccountDialog(false)}
+                  className={`rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 ${interactiveBtnClass}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={onayBusy}
+                  className={`rounded-xl bg-gradient-to-r from-[#0A84FF] to-[#2f9bff] px-3 py-2 text-sm font-semibold ${interactiveBtnClass}`}
+                >
+                  {onayBusyActionKey === "onay:save-account" ? "Saving..." : "Save and authorize"}
+                </button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showOnayRefreshConfirm} onOpenChange={setShowOnayRefreshConfirm}>
+          <DialogContent className="border-white/10 bg-[#0d1017] text-white sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Refresh token bundle?</DialogTitle>
+              <DialogDescription className="text-gray-400">Будет выполнен лишний запрос в Onay. Продолжить refresh для текущего аккаунта{onayAccount?.phoneNumberMasked ? ` ${onayAccount.phoneNumberMasked}` : ""}?</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setShowOnayRefreshConfirm(false)}
+                className={`rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 ${interactiveBtnClass}`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleOnaySignIn()}
+                disabled={onayBusy}
+                className={`rounded-xl bg-gradient-to-r from-[#0A84FF] to-[#2f9bff] px-3 py-2 text-sm font-semibold ${interactiveBtnClass}`}
+              >
+                Continue
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showResetOnayAccountConfirm} onOpenChange={setShowResetOnayAccountConfirm}>
+          <DialogContent className="border-white/10 bg-[#0d1017] text-white sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Use env default account?</DialogTitle>
+              <DialogDescription className="text-gray-400">Сохраненный аккаунт из админки будет отключен, и система снова начнет использовать Render env по умолчанию.</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setShowResetOnayAccountConfirm(false)}
+                className={`rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 ${interactiveBtnClass}`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleResetOnayAccount()}
+                disabled={onayBusy}
+                className={`rounded-xl border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/15 ${interactiveBtnClass}`}
+              >
+                Switch to env
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <motion.section
           initial={{ opacity: 0, y: 12 }}
@@ -824,13 +1274,18 @@ export default function Admin() {
                 Swipe left on a card for quick actions
               </div>
             </div>
-            <button
-              onClick={() => void refreshUsers()}
-              disabled={isLoadingUsers}
-              className={`rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
-            >
-              {isLoadingUsers ? "Refreshing..." : "Refresh"}
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-300">
+                {filteredUsers.length} / {users.length}
+              </div>
+              <button
+                onClick={() => void refreshUsers()}
+                disabled={isLoadingUsers}
+                className={`rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
+              >
+                {isLoadingUsers ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2">
@@ -851,7 +1306,10 @@ export default function Admin() {
             </select>
           </div>
 
-          <div className="grid gap-3">
+          {/* MODIFIED BY AI: 2026-03-19 - use native overflow scrolling for the users list so it stays inside its section on mobile */}
+          {/* FILE: client/src/pages/Admin.tsx */}
+          <div className="max-h-[520px] overflow-y-auto pr-1 sm:max-h-[620px]">
+            <div className="grid gap-3 pr-2 pb-1">
             {isLoadingUsers && users.length === 0 ? (
               Array.from({ length: 4 }).map((_, idx) => (
                 <div
@@ -870,46 +1328,48 @@ export default function Admin() {
                       exit={{ opacity: 0, y: -6 }}
                       transition={{ duration: 0.18, delay: Math.min(index * 0.02, 0.14) }}
                       key={entry.id}
-                      className="relative rounded-xl border border-white/10 bg-white/5 overflow-hidden"
+                      className="relative overflow-hidden rounded-xl border border-white/10 bg-[linear-gradient(135deg,rgba(9,12,18,0.94),rgba(6,9,14,0.98))]"
                     >
-                      <div className="sm:hidden absolute inset-y-0 right-0 w-52 grid grid-cols-3 gap-2 p-2 bg-[#0d0f13] border-l border-white/10">
+                      <div className="sm:hidden absolute inset-y-0 right-0 w-52 grid grid-cols-3 gap-2 border-l border-white/10 bg-[linear-gradient(90deg,rgba(6,8,13,0.98),rgba(10,14,21,0.94))] p-2">
                         <button
                           onClick={() => void handleSwipeResetDevice(entry.id)}
                           disabled={isBusy}
                           className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2 text-[11px] ${interactiveBtnClass}`}
                         >
-                          Reset
+                          {isPendingAction(`user:${entry.id}:reset`) ? "..." : "Reset"}
                         </button>
                         <button
                           onClick={() => void handleSwipeExtend(entry.id, "1m")}
                           disabled={isBusy}
                           className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2 text-[11px] ${interactiveBtnClass}`}
                         >
-                          +1M
+                          {isPendingAction(`user:${entry.id}:extend:1m`) ? "..." : "+1M"}
                         </button>
                         <button
                           onClick={() => void handleSwipeExtend(entry.id, "3m")}
                           disabled={isBusy}
                           className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2 text-[11px] ${interactiveBtnClass}`}
                         >
-                          +3M
+                          {isPendingAction(`user:${entry.id}:extend:3m`) ? "..." : "+3M"}
                         </button>
                         <button
                           onClick={() => void handleSwipeExtend(entry.id, "6m")}
                           disabled={isBusy}
                           className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2 text-[11px] ${interactiveBtnClass}`}
                         >
-                          +6M
+                          {isPendingAction(`user:${entry.id}:extend:6m`) ? "..." : "+6M"}
                         </button>
                         <button
                           onClick={() => void handleSwipeDeleteUser(entry.id)}
                           disabled={isBusy}
                           className={`rounded-lg border border-red-500/50 bg-red-950/20 px-2 py-2 text-[11px] text-red-200 ${interactiveBtnClass}`}
                         >
-                          Delete
+                          {isPendingAction(`user:${entry.id}:delete`) ? "..." : "Delete"}
                         </button>
                       </div>
 
+                      {/* MODIFIED BY AI: 2026-03-19 - bring back a subtle translucent front layer so swipe actions softly show through behind the card */}
+                      {/* FILE: client/src/pages/Admin.tsx */}
                       <motion.div
                         animate={{ x: swipedUserId === entry.id ? -208 : 0 }}
                         transition={{ type: "spring", stiffness: 330, damping: 28 }}
@@ -924,7 +1384,7 @@ export default function Admin() {
                             closeSwipe();
                           }
                         }}
-                        className="relative z-10 p-3 space-y-3 bg-[#10141b]/95"
+                        className="relative z-10 space-y-3 bg-[linear-gradient(135deg,rgba(16,20,27,0.78),rgba(11,15,22,0.72))] p-3 backdrop-blur-[10px]"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div>
@@ -951,35 +1411,35 @@ export default function Admin() {
                             disabled={isBusy}
                             className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
                           >
-                            Reset Device
+                            {isPendingAction(`user:${entry.id}:reset`) ? "Resetting..." : "Reset Device"}
                           </button>
                           <button
                             onClick={() => extendUser(entry.id, "1m")}
                             disabled={isBusy}
                             className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
                           >
-                            +1 Month
+                            {isPendingAction(`user:${entry.id}:extend:1m`) ? "Saving..." : "+1 Month"}
                           </button>
                           <button
                             onClick={() => extendUser(entry.id, "3m")}
                             disabled={isBusy}
                             className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
                           >
-                            +3 Months
+                            {isPendingAction(`user:${entry.id}:extend:3m`) ? "Saving..." : "+3 Months"}
                           </button>
                           <button
                             onClick={() => extendUser(entry.id, "6m")}
                             disabled={isBusy}
                             className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
                           >
-                            +6 Months
+                            {isPendingAction(`user:${entry.id}:extend:6m`) ? "Saving..." : "+6 Months"}
                           </button>
                           <button
                             onClick={() => deleteUser(entry.id)}
                             disabled={isBusy}
                             className={`rounded-lg border border-red-500/50 bg-red-950/20 px-2 py-2.5 text-xs text-red-200 hover:bg-red-900/30 ${interactiveBtnClass}`}
                           >
-                            Delete
+                            {isPendingAction(`user:${entry.id}:delete`) ? "Deleting..." : "Delete"}
                           </button>
                         </div>
                       </motion.div>
@@ -992,6 +1452,7 @@ export default function Admin() {
                 ) : null}
               </>
             )}
+            </div>
           </div>
         </motion.section>
 
@@ -1009,6 +1470,9 @@ export default function Admin() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
+              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-300">
+                closed: {closedSessionsCount}
+              </div>
               <button
                 onClick={() => setIsAutoRefreshEnabled((prev) => !prev)}
                 className={`rounded-lg border px-2.5 py-1.5 text-xs ${interactiveBtnClass} ${
@@ -1025,6 +1489,13 @@ export default function Admin() {
                 className={`rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
               >
                 {isRefreshingSessions ? "Refreshing..." : "Refresh"}
+              </button>
+              <button
+                onClick={() => setShowCleanupClosedConfirm(true)}
+                disabled={isBusy || closedSessionsCount === 0}
+                className={`rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
+              >
+                {isPendingAction("sessions:cleanup-closed") ? "Cleaning..." : "Clear closed"}
               </button>
               {sessionLoginFilter ? (
                 <button
@@ -1087,7 +1558,7 @@ export default function Admin() {
                           disabled={isBusy || isRefreshingSessions}
                           className={`rounded-lg border border-red-500/50 bg-red-950/20 px-2.5 py-1.5 text-xs text-red-200 hover:bg-red-900/30 ${interactiveBtnClass}`}
                         >
-                          Delete
+                          {isPendingAction(`session:${session.id}:delete`) ? "Deleting..." : "Delete"}
                         </button>
                       </div>
                     </motion.article>
@@ -1101,7 +1572,37 @@ export default function Admin() {
             )}
           </div>
         </motion.section>
+
+        <Dialog open={showCleanupClosedConfirm} onOpenChange={setShowCleanupClosedConfirm}>
+          <DialogContent className="border-white/10 bg-[#0d1017] text-white sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Clear closed sessions?</DialogTitle>
+              <DialogDescription className="text-gray-400">Будут удалены все закрытые session logs. Активные сессии останутся на месте.</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setShowCleanupClosedConfirm(false)}
+                className={`rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 ${interactiveBtnClass}`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCleanupClosedConfirm(false);
+                  void cleanupClosedSessions();
+                }}
+                disabled={isBusy}
+                className={`rounded-xl bg-gradient-to-r from-[#0A84FF] to-[#2f9bff] px-3 py-2 text-sm font-semibold ${interactiveBtnClass}`}
+              >
+                Continue
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
 }
+

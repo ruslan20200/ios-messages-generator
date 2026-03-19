@@ -25,16 +25,44 @@ import {
 import { cleanupExpiredUsers, type CleanupMode } from "./cleanupExpired";
 import { query } from "./db";
 import { OnayClient, loadOnayConfig } from "./onayClient";
+import {
+  clearOnayAccountOverride,
+  getEffectiveOnayConfig,
+  getOnayAccountSummary,
+  saveOnayAccountOverride,
+} from "./onayCredentials";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let onayClient: OnayClient | null = null;
+let onayClientSignature: string | null = null;
 
-const getOnayClient = () => {
-  if (!onayClient) {
-    onayClient = new OnayClient(loadOnayConfig());
+const buildOnayClientSignature = (config: ReturnType<typeof loadOnayConfig>) =>
+  [
+    config.baseUrl,
+    config.appToken,
+    config.deviceId,
+    config.phoneNumber,
+    config.password,
+    config.pushToken,
+    config.cityId,
+  ].join("::");
+
+const resetOnayClient = () => {
+  onayClient = null;
+  onayClientSignature = null;
+};
+
+const getOnayClient = async () => {
+  const config = await getEffectiveOnayConfig();
+  const signature = buildOnayClientSignature(config);
+
+  if (!onayClient || onayClientSignature !== signature) {
+    onayClient = new OnayClient(config);
+    onayClientSignature = signature;
   }
+
   return onayClient;
 };
 
@@ -46,23 +74,17 @@ const warmupOnayClient = () => {
   if (!onayWarmupOnBoot) return;
 
   setTimeout(() => {
-    try {
-      const client = getOnayClient();
-      void client
-        .warmup()
-        .then(() => {
-          console.log("[onay] warmup completed");
-        })
-        .catch((error) => {
-          const message =
-            error instanceof Error ? error.message : "unknown warmup error";
-          console.warn("[onay] warmup failed", message);
-        });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "unknown warmup error";
-      console.warn("[onay] warmup init failed", message);
-    }
+    void (async () => {
+      try {
+        const client = await getOnayClient();
+        await client.warmup();
+        console.log("[onay] warmup completed");
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "unknown warmup error";
+        console.warn("[onay] warmup failed", message);
+      }
+    })();
   }, 250);
 };
 
@@ -91,8 +113,11 @@ type AuthenticatedRequest = Request & {
 
 const normalizeLogin = (value: unknown) => String(value || "").trim().toLowerCase();
 const normalizePassword = (value: unknown) => String(value || "");
+const normalizePhoneNumber = (value: unknown) => String(value || "").trim();
 const normalizeDeviceId = (value: unknown) => String(value || "").trim();
 const terminalDigitsPattern = /^\d+$/;
+const maskPhoneNumber = (value: string) =>
+  value.length <= 6 ? value : `${value.slice(0, 4)}***${value.slice(-2)}`;
 
 const parseUserId = (value: string) => {
   const parsed = Number.parseInt(value, 10);
@@ -1462,6 +1487,134 @@ async function startServer() {
     }
   });
 
+  // MODIFIED BY AI: 2026-03-19 - allow bulk cleanup of inactive session logs from admin panel
+  // FILE: server/index.ts
+  app.post("/admin/sessions/cleanup", requireAuth, requireAdmin, async (req, res) => {
+    const scope = String(req.body?.scope || "closed").trim().toLowerCase();
+    if (scope !== "closed") {
+      return res.status(400).json({
+        success: false,
+        error: "Only scope=closed is supported",
+      });
+    }
+
+    try {
+      const deleted = await query<{ count: string }>(
+        `WITH removed AS (
+           DELETE FROM sessions
+           WHERE is_active = FALSE
+           RETURNING id
+         )
+         SELECT COUNT(*)::text AS count
+         FROM removed`,
+      );
+
+      const deletedCount = Number(deleted.rows[0]?.count || "0");
+      const auth = (req as AuthenticatedRequest).auth;
+      if (auth) {
+        await logAdminAction({
+          adminUserId: auth.userId,
+          action: "cleanup_sessions",
+          notes: `scope=${scope}; deleted=${deletedCount}`,
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: { deletedCount },
+      });
+    } catch (error) {
+      return res.status(500).json({ success: false, error: "Failed to cleanup sessions" });
+    }
+  });
+
+  // MODIFIED BY AI: 2026-03-19 - expose active Onay account source and allow saving a new validated account without changing Render env
+  // FILE: server/index.ts
+  app.get("/admin/onay/account", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      const account = await getOnayAccountSummary();
+      return res.json({ success: true, data: { account } });
+    } catch (error) {
+      return res.status(500).json({ success: false, error: "Failed to load Onay account" });
+    }
+  });
+
+  app.post("/admin/onay/account", requireAuth, requireAdmin, async (req, res) => {
+    const phoneNumber = normalizePhoneNumber(req.body?.phoneNumber);
+    const password = normalizePassword(req.body?.password);
+
+    if (!phoneNumber || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Fields phoneNumber and password are required",
+      });
+    }
+
+    try {
+      const tempClient = new OnayClient(
+        loadOnayConfig({
+          phoneNumber,
+          password,
+        }),
+      );
+      const tokens = await tempClient.signIn(true);
+
+      const auth = (req as AuthenticatedRequest).auth;
+      await saveOnayAccountOverride({
+        phoneNumber,
+        password,
+        adminUserId: auth?.userId ?? null,
+      });
+      resetOnayClient();
+
+      if (auth) {
+        await logAdminAction({
+          adminUserId: auth.userId,
+          action: "save_onay_account",
+          notes: `phone=${maskPhoneNumber(phoneNumber)}`,
+        });
+      }
+
+      const account = await getOnayAccountSummary();
+      return res.json({
+        success: true,
+        data: {
+          account,
+          tokens: {
+            token: tokens.token,
+            shortToken: tokens.shortToken,
+            deviceId: tokens.deviceId,
+          },
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to sign in with provided Onay account";
+      return res.status(502).json({ success: false, error: message });
+    }
+  });
+
+  app.delete("/admin/onay/account", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      await clearOnayAccountOverride();
+      resetOnayClient();
+
+      const auth = (req as AuthenticatedRequest).auth;
+      if (auth) {
+        await logAdminAction({
+          adminUserId: auth.userId,
+          action: "reset_onay_account",
+          notes: "source=env",
+        });
+      }
+
+      const account = await getOnayAccountSummary();
+      return res.json({ success: true, data: { account } });
+    } catch (error) {
+      return res.status(500).json({ success: false, error: "Failed to reset Onay account" });
+    }
+  });
+
   app.post("/admin/cleanup-expired", requireAuth, requireAdmin, async (req, res) => {
     const rawMode = String(req.body?.mode || "deactivate").toLowerCase();
     const mode: CleanupMode = rawMode === "delete" ? "delete" : "deactivate";
@@ -1502,7 +1655,7 @@ async function startServer() {
     }
 
     try {
-      const client = getOnayClient();
+      const client = await getOnayClient();
       const trip = await client.qrStart(terminal);
       res.setHeader("X-Onay-Latency-Ms", String(Date.now() - startedAt));
 
@@ -1527,9 +1680,12 @@ async function startServer() {
   });
 
   app.post("/api/onay/sign-in", async (_req, res) => {
+    const startedAt = Date.now();
     try {
-      const client = getOnayClient();
+      const client = await getOnayClient();
       const tokens = await client.signIn(true);
+      const account = await getOnayAccountSummary();
+      res.setHeader("X-Onay-Latency-Ms", String(Date.now() - startedAt));
 
       return res.json({
         success: true,
@@ -1537,6 +1693,8 @@ async function startServer() {
           token: tokens.token,
           shortToken: tokens.shortToken,
           deviceId: tokens.deviceId,
+          source: account.source,
+          phoneNumberMasked: account.phoneNumberMasked,
         },
       });
     } catch (error) {
@@ -1544,6 +1702,7 @@ async function startServer() {
       const message =
         error instanceof Error ? error.message : "Unexpected Onay error";
       console.error("/api/onay/sign-in failed", message);
+      res.setHeader("X-Onay-Latency-Ms", String(Date.now() - startedAt));
       return res.status(status).json({ success: false, message });
     }
   });

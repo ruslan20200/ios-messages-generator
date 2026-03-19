@@ -1,10 +1,19 @@
 // MODIFIED BY AI: 2026-02-12 - localize Home page text to Russian with clearer action hints
 // FILE: client/src/pages/Home.tsx
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TravelStatsPanel } from "@/components/TravelStatsPanel";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { useAuth } from "@/contexts/AuthContext";
 import { useChat } from "@/contexts/ChatContext";
 import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
@@ -56,6 +65,7 @@ async function fetchWithRetry(
 }
 
 export default function Home() {
+  const { user, logout } = useAuth();
   const { settings, updateSettings, setAutoScanEnabled, clearHistory } = useChat();
   const [route, setRoute] = useState(settings.route || "244");
   const [number, setNumber] = useState(settings.number || "521AV05");
@@ -70,6 +80,8 @@ export default function Home() {
     terminal?: string | null;
   } | null>(null);
   const [isOnayPanelOpen, setIsOnayPanelOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [, setLocation] = useLocation();
   const autoScanEnabled = settings.autoScan === true;
 
@@ -159,6 +171,17 @@ export default function Home() {
     }
   };
 
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      setLocation("/login");
+    } finally {
+      setIsLoggingOut(false);
+      setShowLogoutConfirm(false);
+    }
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#04050a] text-white safe-area-top safe-area-bottom">
       <div className="pointer-events-none absolute inset-0">
@@ -181,6 +204,32 @@ export default function Home() {
             </p>
           </div>
         </motion.section>
+
+        {user?.role === "admin" ? (
+          <motion.section
+            className={`${glassCardClass} p-4`}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...cardTransition, delay: 0.02 }}
+          >
+            {/* MODIFIED BY AI: 2026-03-19 - expose the admin panel from Home so admins can still use the app like regular users */}
+            {/* FILE: client/src/pages/Home.tsx */}
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-base font-semibold">{"\u0410\u0434\u043c\u0438\u043d \u043f\u0430\u043d\u0435\u043b\u044c"}</div>
+                <div className="text-sm text-gray-400">
+                  {"\u041e\u0442\u043a\u0440\u044b\u0432\u0430\u0439\u0442\u0435 \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f\u043c\u0438 \u0438 Onay \u043e\u0442\u0441\u044e\u0434\u0430, \u043d\u0435 \u0432\u044b\u0445\u043e\u0434\u044f \u0438\u0437 \u043e\u0431\u044b\u0447\u043d\u043e\u0433\u043e \u0440\u0435\u0436\u0438\u043c\u0430."}
+                </div>
+              </div>
+              <Button
+                onClick={() => setLocation("/admin")}
+                className="h-10 rounded-xl bg-white/10 px-4 text-sm font-semibold text-white transition-all duration-200 hover:bg-white/15 active:scale-[0.98]"
+              >
+                {"\u041e\u0442\u043a\u0440\u044b\u0442\u044c"}
+              </Button>
+            </div>
+          </motion.section>
+        ) : null}
 
         <motion.section
           className={`${glassCardClass} p-4`}
@@ -326,8 +375,47 @@ export default function Home() {
             >
               Очистить историю
             </Button>
+
+            {/* MODIFIED BY AI: 2026-03-19 - provide one shared logout action on Home for every authenticated user */}
+            {/* FILE: client/src/pages/Home.tsx */}
+            <Button
+              onClick={() => setShowLogoutConfirm(true)}
+              className="h-11 w-full rounded-2xl border border-white/20 bg-white/5 text-sm font-semibold text-white transition-all duration-200 hover:bg-white/10 active:scale-[0.99]"
+            >
+              {"\u0412\u044b\u0439\u0442\u0438 \u0438\u0437 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430"}
+            </Button>
           </div>
         </motion.section>
+
+        <Dialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+          <DialogContent className="border-white/10 bg-[#0d1017] text-white sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{"\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 \u0432\u044b\u0445\u043e\u0434"}</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                {"\u0412\u044b \u0442\u043e\u0447\u043d\u043e \u0445\u043e\u0442\u0438\u0442\u0435 \u0432\u044b\u0439\u0442\u0438 \u0438\u0437 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430 \u043d\u0430 \u044d\u0442\u043e\u043c \u0443\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432\u0435?"}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
+              >
+                {"\u041e\u0442\u043c\u0435\u043d\u0430"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                disabled={isLoggingOut}
+                className="rounded-xl border border-red-400/35 bg-red-500/15 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:opacity-60"
+              >
+                {isLoggingOut
+                  ? "\u0412\u044b\u0445\u043e\u0434\u0438\u043c..."
+                  : "\u0412\u044b\u0439\u0442\u0438"}
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

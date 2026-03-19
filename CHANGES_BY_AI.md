@@ -580,3 +580,102 @@ if (message.isMe || !message.details) return null;
 ```tsx
 <div className="shrink-0 whitespace-nowrap ...">{stats.rideCount} поездок</div>
 ```
+
+## 59) migrations/002_create_onay_credentials.sql + server/onayCredentials.ts + server/index.ts (saved Onay account override)
+- Description: Added a persistent admin-managed Onay account override stored in PostgreSQL instead of forcing Render env changes. The server now supports reading the active Onay account summary, saving a new validated phone/password pair, resetting back to env defaults, reusing the saved account for `Refresh token bundle`, and bulk cleanup of closed session logs.
+- Date: 2026-03-19
+- Diff sample:
+```sql
+CREATE TABLE IF NOT EXISTS onay_credentials (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  phone_number_encrypted TEXT NOT NULL,
+  password_encrypted TEXT NOT NULL
+);
+```
+```ts
+const response = await apiRequest<OnaySaveAccountResponse>("/admin/onay/account", {
+  method: "POST",
+  token,
+  body: JSON.stringify({ phoneNumber, password }),
+});
+```
+```ts
+app.post("/admin/sessions/cleanup", requireAuth, requireAdmin, async (req, res) => {
+```
+
+## 60) client/src/pages/Admin.tsx (Onay account management, compact lists, progress feedback)
+- Description: Improved admin UX with a saved Onay account dialog, confirmation popup before token refresh, compact users list with internal scroll, closed sessions cleanup action, per-action loading states, progress banners, and more visible feedback for reset/extend/delete operations.
+- Date: 2026-03-19
+- Diff sample:
+```tsx
+<Dialog open={showOnayRefreshConfirm} onOpenChange={setShowOnayRefreshConfirm}>
+```
+```tsx
+<ScrollArea className="max-h-[620px]">
+```
+```tsx
+{isPendingAction(`user:${entry.id}:extend:1m`) ? "Saving..." : "+1 Month"}
+```
+
+## 61) client/src/pages/Admin.tsx (mobile users list overlap cleanup)
+- Description: Tightened the mobile `Users` scroll area height and made the swipe-action/background layers fully opaque so the users block no longer visually bleeds into the sessions block and hidden quick actions stop showing through cards.
+- Date: 2026-03-19
+- Diff sample:
+```tsx
+<ScrollArea className="max-h-[520px] sm:max-h-[620px]">
+```
+```tsx
+className="relative overflow-hidden rounded-xl border border-white/10 bg-[#0b0e14]"
+```
+
+## 62) client/src/pages/Admin.tsx (native mobile scroll for users list)
+- Description: Replaced the Radix `ScrollArea` wrapper in the `Users` section with native `overflow-y-auto`, because the previous wrapper still allowed the list to visually run under the sessions block on mobile. The users list now scrolls inside its own section reliably.
+- Date: 2026-03-19
+- Diff sample:
+```tsx
+<div className="max-h-[520px] overflow-y-auto pr-1 sm:max-h-[620px]">
+```
+
+## 63) client/src/App.tsx + client/src/pages/Login.tsx + client/src/pages/Home.tsx + client/src/lib/bootstrapRoute.ts + client/src/pages/Admin.tsx (shared Home entry for admin accounts)
+- Description: Stopped forcing admin accounts straight into `/admin` on login, root redirects, and cached startup. Admin users now open the regular Home screen like everyone else, and Home includes a dedicated "Открыть" entry card above the API section for jumping into the protected admin panel when needed.
+- Date: 2026-03-19
+- Diff sample:
+```tsx
+navigate("/home", { replace: true });
+```
+```tsx
+{user?.role === "admin" ? (
+  <Button onClick={() => setLocation("/admin")}>Открыть</Button>
+) : null}
+```
+```ts
+return "/home";
+```
+
+## 64) client/src/pages/Admin.tsx (restore translucent swipe hints and reorder Onay result panels)
+- Description: Brought back a subtle translucent mobile overlay in the Users list so swipe actions softly show through behind each card again, while keeping the list scrollable. Reordered `Onay Tools` so `Sign-in result` now appears directly under `Current Onay account`, with the latency metrics moved below it.
+- Date: 2026-03-19
+- Diff sample:
+```tsx
+className="relative z-10 ... bg-[linear-gradient(135deg,rgba(16,20,27,0.78),rgba(11,15,22,0.72))] ..."
+```
+```tsx
+<div className="text-sm font-semibold text-white">Sign-in result</div>
+```
+```tsx
+<div className="grid grid-cols-1 gap-2 rounded-2xl border border-cyan-300/20 bg-cyan-500/10 p-3">
+```
+
+## 65) client/src/pages/Home.tsx + client/src/pages/Admin.tsx (shared logout on Home and collapsible Onay tools)
+- Description: Moved account logout out of the admin header and into the shared Home screen so every authenticated user can sign out from one place with a confirmation dialog. The admin header now has a back-to-Home button, and `Onay Tools` is collapsed behind a chevron toggle with a shorter description for a cleaner first view.
+- Date: 2026-03-19
+- Diff sample:
+```tsx
+<Button onClick={() => setShowLogoutConfirm(true)}>Выйти из аккаунта</Button>
+```
+```tsx
+<button onClick={() => navigate("/home")}>Назад на главный экран</button>
+```
+```tsx
+{isOnayToolsOpen ? <motion.div key="onay-tools-body">...</motion.div> : null}
+```
