@@ -28,7 +28,9 @@ const getJwtSecret = () => {
 };
 
 export const signAuthToken = (payload: AuthPayload) => {
-  const expiresIn = (process.env.JWT_EXPIRES_IN || "7d") as jwt.SignOptions["expiresIn"];
+  // MODIFIED BY AI: 2026-03-19 - extend default auth token lifetime so inactive users are not forced out after 7 days
+  // FILE: server/auth.ts
+  const expiresIn = (process.env.JWT_EXPIRES_IN || "30d") as jwt.SignOptions["expiresIn"];
   return jwt.sign(payload, getJwtSecret(), { expiresIn } as jwt.SignOptions);
 };
 

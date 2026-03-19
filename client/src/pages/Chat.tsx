@@ -120,6 +120,8 @@ export default function Chat() {
   const inputRef = useRef<HTMLInputElement>(null);
   const isIOSRef = useRef(isIOSDevice());
   const lastSerializedApiMessagesRef = useRef("");
+  const viewportBaseHeightRef = useRef(typeof window !== "undefined" ? window.innerHeight : 0);
+  const keyboardSyncRef = useRef<() => void>(() => {});
 
   const mode =
     new URLSearchParams(window.location.search).get("mode") === "api"
@@ -169,9 +171,15 @@ export default function Chat() {
   }, [apiMessages, mode]);
 
   useEffect(() => {
-    setTimeout(() => {
+    if (isIOSRef.current) return;
+
+    const focusTimer = window.setTimeout(() => {
       inputRef.current?.focus();
     }, 300);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+    };
   }, []);
 
   useEffect(() => {
@@ -211,38 +219,58 @@ export default function Chat() {
   }, [apiMessages, mode]);
 
   useEffect(() => {
-    if (isIOSRef.current) {
-      setKeyboardOffset(0);
-      return;
-    }
-
     const viewport = window.visualViewport;
     if (!viewport) return;
 
+    let rafId = 0;
+
+    // MODIFIED BY AI: 2026-03-19 - stabilize first iPhone keyboard open by measuring against the pre-keyboard viewport height
+    // FILE: client/src/pages/Chat.tsx
     const syncKeyboardOffset = () => {
+      const visibleHeight = Math.round(viewport.height + viewport.offsetTop);
+      const candidateBaseHeight = Math.max(
+        viewportBaseHeightRef.current,
+        Math.round(window.innerHeight),
+        visibleHeight,
+      );
+
       if (!isInputFocused) {
+        viewportBaseHeightRef.current = candidateBaseHeight;
         setKeyboardOffset(0);
         return;
       }
 
-      const visibleHeight = Math.round(viewport.height + viewport.offsetTop);
-      const rawOffset = Math.max(0, Math.round(window.innerHeight - visibleHeight));
-      const maxOffset = DEFAULT_KEYBOARD_MAX_OFFSET;
+      const rawOffset = Math.max(0, viewportBaseHeightRef.current - visibleHeight);
+      const maxOffset = isIOSRef.current ? 420 : DEFAULT_KEYBOARD_MAX_OFFSET;
       const nextOffset =
         rawOffset > KEYBOARD_OPEN_THRESHOLD
           ? Math.max(0, Math.min(Math.round(rawOffset), maxOffset))
           : 0;
 
+      if (nextOffset === 0) {
+        viewportBaseHeightRef.current = candidateBaseHeight;
+      }
+
       setKeyboardOffset(nextOffset);
     };
 
-    syncKeyboardOffset();
-    viewport.addEventListener("resize", syncKeyboardOffset);
-    window.addEventListener("orientationchange", syncKeyboardOffset);
+    const scheduleSync = () => {
+      window.cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(syncKeyboardOffset);
+    };
+
+    keyboardSyncRef.current = scheduleSync;
+
+    scheduleSync();
+    viewport.addEventListener("resize", scheduleSync);
+    window.addEventListener("resize", scheduleSync);
+    window.addEventListener("orientationchange", scheduleSync);
 
     return () => {
-      viewport.removeEventListener("resize", syncKeyboardOffset);
-      window.removeEventListener("orientationchange", syncKeyboardOffset);
+      window.cancelAnimationFrame(rafId);
+      viewport.removeEventListener("resize", scheduleSync);
+      window.removeEventListener("resize", scheduleSync);
+      window.removeEventListener("orientationchange", scheduleSync);
     };
   }, [isInputFocused]);
 
@@ -526,7 +554,10 @@ export default function Chat() {
 
       <div
         className="fixed left-0 right-0 z-50 safe-area-bottom"
-        style={{ bottom: isIOSRef.current ? 10 : keyboardOffset + 30 }}
+        style={{
+          bottom: keyboardOffset > 0 ? keyboardOffset + 8 : 10,
+          paddingBottom: keyboardOffset > 0 ? 0 : undefined,
+        }}
       >
         <div className="mx-auto flex w-full max-w-md items-end gap-1.5 px-2.5 pb-1.5">
           <button
@@ -556,9 +587,19 @@ export default function Chat() {
                   pattern={mode === "api" ? "[0-9]*" : undefined}
                   onFocus={() => {
                     setIsInputFocused(true);
-                    setTimeout(() => {
+                    keyboardSyncRef.current();
+                    window.requestAnimationFrame(() => {
+                      keyboardSyncRef.current();
                       scrollToBottom("auto");
-                    }, 80);
+                    });
+                    window.setTimeout(() => {
+                      keyboardSyncRef.current();
+                      scrollToBottom("auto");
+                    }, 120);
+                    window.setTimeout(() => {
+                      keyboardSyncRef.current();
+                      scrollToBottom("auto");
+                    }, 260);
                   }}
                   onBlur={() => setIsInputFocused(false)}
                   placeholder={mode === "api" ? "Текстовое сообщение • SMS" : "Текстовое сообщение • iMessage"}

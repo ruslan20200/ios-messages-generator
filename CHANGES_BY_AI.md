@@ -504,3 +504,51 @@ type ExtendUserTerm = "1m" | "3m" | "6m" | "permanent";
 ```ts
 // weekly extend branch removed from /admin/users/:id/extend
 ```
+
+## 53) client/index.html + client/src/App.tsx (remove startup boot screen)
+- Description: Removed the startup boot/preload card from both raw HTML and React fallbacks. The app now opens without the "Загрузка... / Открываем приложение" card and without a replacement spinner.
+- Date: 2026-03-19
+- Diff sample:
+```html
+<div id="root"></div>
+```
+```tsx
+<Suspense fallback={null}>
+if (isLoading) return null;
+```
+
+## 54) auth session persistence + deviceId backup cookie
+- Description: Reduced forced re-login by extending auth session defaults to 30 days and rotating auth on `/auth/me`. Hardened `deviceId` persistence by syncing it between `localStorage` and a long-lived cookie, plus refreshing a server-set device cookie after login/bootstrap.
+- Date: 2026-03-19
+- Diff sample:
+```ts
+const expiresIn = (process.env.JWT_EXPIRES_IN || "30d") as jwt.SignOptions["expiresIn"];
+```
+```ts
+res.setHeader("Set-Cookie", [buildAuthCookie(token), buildDeviceIdCookie(deviceId)]);
+```
+```ts
+const cookieDeviceId = readCookieValue("app_device_id");
+```
+
+## 55) client/src/pages/Chat.tsx (fix first iPhone keyboard open positioning)
+- Description: Fixed the first-focus iPhone composer glitch by disabling initial iOS auto-focus, measuring keyboard inset against the pre-keyboard viewport height, and running extra sync passes right after the first input focus.
+- Date: 2026-03-19
+- Diff sample:
+```ts
+const viewportBaseHeightRef = useRef(typeof window !== "undefined" ? window.innerHeight : 0);
+```
+```ts
+bottom: keyboardOffset > 0 ? keyboardOffset + 8 : 10,
+```
+
+## 56) faster cached entry route + earlier client route warmup
+- Description: Improved startup on weak/offline networks by restoring the last authenticated route before React mounts, remembering the last opened screen, warming essential mobile routes earlier, and registering the service worker immediately.
+- Date: 2026-03-19
+- Diff sample:
+```ts
+bootstrapClientRoute();
+```
+```ts
+rememberLastAuthedRoute(currentRoute, user.role);
+```

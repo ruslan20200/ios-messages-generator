@@ -1,10 +1,10 @@
-// MODIFIED BY AI: 2026-02-12 - add auth/admin routes with protected guards while keeping chat flow
+// MODIFIED BY AI: 2026-03-19 - remove startup boot/loading screen and keep initial render blank
 // FILE: client/src/App.tsx
 
 import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
-import { Spinner } from "@/components/ui/spinner";
 import { UpdateNotice } from "@/components/UpdateNotice";
+import { rememberLastAuthedRoute } from "@/lib/bootstrapRoute";
 import { ChatProvider } from "@/contexts/ChatContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/useMobile";
@@ -58,20 +58,6 @@ const shouldPrefetchLightRoutes = () => {
   return true;
 };
 
-function LoadingScreen() {
-  return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center px-5">
-      <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-[#0f1218]/92 px-6 py-5 shadow-[0_14px_34px_rgba(0,0,0,0.42)] backdrop-blur-md">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ios-blue/18 text-ios-blue">
-          <Spinner className="size-5" />
-        </div>
-        <div className="text-sm font-medium text-gray-200">Загрузка…</div>
-        <div className="text-xs text-gray-400">Открываем приложение</div>
-      </div>
-    </div>
-  );
-}
-
 function MobileOnly({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile();
 
@@ -92,7 +78,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, user, navigate]);
 
-  if (isLoading) return <LoadingScreen />;
+  if (isLoading) return null;
   if (!user) return null;
 
   return <>{children}</>;
@@ -108,7 +94,7 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, user, navigate]);
 
-  if (isLoading) return <LoadingScreen />;
+  if (isLoading) return null;
   if (!user || user.role !== "admin") return null;
 
   return <>{children}</>;
@@ -149,10 +135,26 @@ function LoginRoute() {
     });
   }, [isLoading, user, navigate]);
 
-  if (isLoading) return <LoadingScreen />;
+  if (isLoading) return null;
   if (user) return null;
 
   return <Login />;
+}
+
+function RouteMemory() {
+  const { user } = useAuth();
+  const [location] = useLocation();
+
+  useEffect(() => {
+    if (!user) return;
+
+    // MODIFIED BY AI: 2026-03-19 - remember the last authenticated route so offline restarts open the saved screen immediately
+    // FILE: client/src/App.tsx
+    const currentRoute = `${window.location.pathname}${window.location.search}`;
+    rememberLastAuthedRoute(currentRoute, user.role);
+  }, [location, user]);
+
+  return null;
 }
 
 function Router() {
@@ -203,14 +205,21 @@ function Router() {
 
 function App() {
   useEffect(() => {
-    if (!shouldPrefetchLightRoutes()) return;
-
-    const cancelIdle = runWhenIdle(() => {
+    // MODIFIED BY AI: 2026-03-19 - warm essential mobile routes earlier so cached screens open fast on weak/offline networks
+    // FILE: client/src/App.tsx
+    const warmupTimer = window.setTimeout(() => {
       void loadLoginPage();
       void loadChatPage();
+      void loadHomePage();
+    }, shouldPrefetchLightRoutes() ? 80 : 220);
+
+    const cancelIdle = runWhenIdle(() => {
+      void loadAdminPage();
+      void loadQrPage();
     });
 
     return () => {
+      window.clearTimeout(warmupTimer);
       cancelIdle();
     };
   }, []);
@@ -219,7 +228,8 @@ function App() {
     <ChatProvider>
       <Toaster />
       <UpdateNotice />
-      <Suspense fallback={<LoadingScreen />}>
+      <RouteMemory />
+      <Suspense fallback={null}>
         <Router />
       </Suspense>
     </ChatProvider>

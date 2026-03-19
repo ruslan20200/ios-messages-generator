@@ -132,7 +132,11 @@ const allowedOrigins = (process.env.CORS_ORIGIN || "")
 
 const authCookieName = getAuthCookieName();
 const authCookieMaxAgeSeconds = Number(
-  process.env.AUTH_COOKIE_MAX_AGE_SECONDS || 60 * 60 * 24 * 7,
+  process.env.AUTH_COOKIE_MAX_AGE_SECONDS || 60 * 60 * 24 * 30,
+);
+const deviceCookieName = "app_device_id";
+const deviceCookieMaxAgeSeconds = Number(
+  process.env.DEVICE_ID_COOKIE_MAX_AGE_SECONDS || 60 * 60 * 24 * 365,
 );
 const authCookieSameSiteRaw = (process.env.AUTH_COOKIE_SAME_SITE || "lax").toLowerCase();
 const authCookieSameSite =
@@ -160,6 +164,45 @@ const buildAuthCookie = (token: string) => {
   }
 
   return parts.join("; ");
+};
+
+// MODIFIED BY AI: 2026-03-19 - persist device binding in a dedicated long-lived cookie to survive localStorage loss
+// FILE: server/index.ts
+const buildDeviceIdCookie = (deviceId: string) => {
+  const parts = [
+    `${deviceCookieName}=${encodeURIComponent(deviceId)}`,
+    "Path=/",
+    `Max-Age=${deviceCookieMaxAgeSeconds}`,
+    `SameSite=${authCookieSameSite}`,
+  ];
+
+  if (authCookieSecure) {
+    parts.push("Secure");
+  }
+
+  return parts.join("; ");
+};
+
+const setSessionCookies = (res: Response, token: string, deviceId: string) => {
+  res.setHeader("Set-Cookie", [buildAuthCookie(token), buildDeviceIdCookie(deviceId)]);
+};
+
+const issueAuthTokenForUser = (
+  auth: Pick<AuthPayload, "userId" | "sessionId">,
+  user: { role: UserRole; device_id: string | null },
+  fallbackDeviceId: string,
+) => {
+  const nextDeviceId = user.role === "admin" ? fallbackDeviceId : user.device_id || fallbackDeviceId;
+
+  return {
+    deviceId: nextDeviceId,
+    token: signAuthToken({
+      userId: auth.userId,
+      role: user.role,
+      deviceId: nextDeviceId,
+      sessionId: auth.sessionId,
+    }),
+  };
 };
 
 const buildClearedAuthCookie = () => {
@@ -615,6 +658,7 @@ async function startServer() {
                         type: "object",
                         properties: {
                           user: { $ref: "#/components/schemas/UserPublic" },
+                          token: { type: "string" },
                         },
                       },
                     },
@@ -997,16 +1041,15 @@ async function startServer() {
       );
 
       const sessionId = sessionResult.rows[0].id;
-      const token = signAuthToken({
-        userId: user.id,
-        role: user.role,
+      const { token } = issueAuthTokenForUser(
+        { userId: user.id, sessionId },
+        { role: user.role, device_id: user.device_id },
         deviceId,
-        sessionId,
-      });
+      );
 
       loginAttempts.delete(req.ip || "unknown");
 
-      res.setHeader("Set-Cookie", buildAuthCookie(token));
+      setSessionCookies(res, token, deviceId);
 
       return res.json({
         success: true,
@@ -1041,7 +1084,18 @@ async function startServer() {
         return res.status(404).json({ success: false, error: "User not found" });
       }
 
-      return res.json({ success: true, data: { user: toPublicUser(userResult.rows[0]) } });
+      // MODIFIED BY AI: 2026-03-19 - refresh auth/device cookies on auth bootstrap so returning users stay signed in longer
+      // FILE: server/index.ts
+      const userRow = userResult.rows[0];
+      const { token, deviceId } = issueAuthTokenForUser(
+        { userId: auth.userId, sessionId: auth.sessionId },
+        { role: userRow.role, device_id: userRow.device_id },
+        auth.deviceId,
+      );
+
+      setSessionCookies(res, token, deviceId);
+
+      return res.json({ success: true, data: { user: toPublicUser(userRow), token } });
     } catch (error) {
       return res.status(500).json({ success: false, error: "Failed to load user" });
     }

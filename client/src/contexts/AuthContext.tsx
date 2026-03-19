@@ -2,6 +2,7 @@
 // FILE: client/src/contexts/AuthContext.tsx
 
 import { apiRequest, ApiError } from "@/lib/api";
+import { AUTH_USER_CACHE_STORAGE_KEY } from "@/lib/bootstrapRoute";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export type AuthUser = {
@@ -23,7 +24,7 @@ type AuthContextType = {
 };
 
 const TOKEN_STORAGE_KEY = "ios_msg_auth_token";
-const USER_CACHE_KEY = "ios_msg_auth_user_cache";
+const USER_CACHE_KEY = AUTH_USER_CACHE_STORAGE_KEY;
 const USE_TOKEN_FALLBACK = import.meta.env.VITE_USE_TOKEN_FALLBACK === "true";
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 5000;
 
@@ -92,10 +93,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, AUTH_BOOTSTRAP_TIMEOUT_MS);
 
     try {
-      const response = await apiRequest<{ success: boolean; data: { user: AuthUser } }>(
+      const response = await apiRequest<{ success: boolean; data: { user: AuthUser; token?: string } }>(
         "/auth/me",
         { token, signal: controller.signal },
       );
+
+      // MODIFIED BY AI: 2026-03-19 - keep fallback bearer token in sync when server rotates auth on /auth/me
+      // FILE: client/src/contexts/AuthContext.tsx
+      if (response.data.token) {
+        writeToken(response.data.token);
+      }
 
       setUser(response.data.user);
       writeCachedUser(response.data.user);
