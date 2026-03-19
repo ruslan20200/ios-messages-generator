@@ -552,3 +552,31 @@ bootstrapClientRoute();
 ```ts
 rememberLastAuthedRoute(currentRoute, user.role);
 ```
+
+## 57) client/src/lib/travelStats.ts + client/src/components/TravelStatsPanel.tsx + client/src/pages/Home.tsx (local ride spending dashboard)
+- Description: Added a local-only travel statistics dashboard on the home screen. It derives spending, ride counts, favorite routes, vehicle numbers, and daily/weekly/monthly/yearly trends only from saved successful chat history. Failed/error responses are ignored automatically because they do not include ride details. Clearing history now also refreshes and clears the dashboard immediately.
+- Date: 2026-03-19
+- Diff sample:
+```ts
+const stats = useMemo(() => buildTravelStats(period), [period, refreshKey, revision]);
+```
+```tsx
+<TravelStatsPanel refreshKey={statsRefreshKey} />
+```
+```ts
+if (message.isMe || !message.details) return null;
+```
+
+## 58) client/src/components/TravelStatsPanel.tsx + client/src/pages/Home.tsx (compact stats layout and API section order)
+- Description: Removed the circular share indicator from the spending hero, made the stats cards more compact for mobile, fixed narrow badges so counts stay on one line, moved the API card above statistics, and compressed the routes list with a preview mode, toggle, and internal scroll for long histories.
+- Date: 2026-03-19
+- Diff sample:
+```tsx
+<TravelStatsPanel refreshKey={statsRefreshKey} />
+```
+```tsx
+{showAllRoutes ? "Показать меньше" : `Показать все (${stats.routeStats.length})`}
+```
+```tsx
+<div className="shrink-0 whitespace-nowrap ...">{stats.rideCount} поездок</div>
+```

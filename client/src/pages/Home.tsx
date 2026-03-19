@@ -2,6 +2,7 @@
 // FILE: client/src/pages/Home.tsx
 
 import { Button } from "@/components/ui/button";
+import { TravelStatsPanel } from "@/components/TravelStatsPanel";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useChat } from "@/contexts/ChatContext";
@@ -59,6 +60,7 @@ export default function Home() {
   const [route, setRoute] = useState(settings.route || "244");
   const [number, setNumber] = useState(settings.number || "521AV05");
   const [price, setPrice] = useState(settings.price || "120₸");
+  const [statsRefreshKey, setStatsRefreshKey] = useState(0);
   const [terminal, setTerminal] = useState("");
   const [loadingOnay, setLoadingOnay] = useState(false);
   const [lastOnay, setLastOnay] = useState<{
@@ -92,6 +94,13 @@ export default function Home() {
 
   const goApiChat = () => {
     setLocation("/chat?mode=api");
+  };
+
+  // MODIFIED BY AI: 2026-03-19 - keep local travel statistics in sync when saved ride history is cleared
+  // FILE: client/src/pages/Home.tsx
+  const handleClearHistory = () => {
+    clearHistory();
+    setStatsRefreshKey((value) => value + 1);
   };
 
   const handleOnayFetch = async () => {
@@ -209,6 +218,10 @@ export default function Home() {
           </div>
         </motion.section>
 
+        {/* MODIFIED BY AI: 2026-03-19 - place API entry above the local stats block as requested */}
+        {/* FILE: client/src/pages/Home.tsx */}
+        <TravelStatsPanel refreshKey={statsRefreshKey} />
+
         <motion.section
           className={`${glassCardClass} space-y-4 p-4`}
           initial={{ opacity: 0, y: 16 }}
@@ -308,7 +321,7 @@ export default function Home() {
             </Button>
 
             <Button
-              onClick={clearHistory}
+              onClick={handleClearHistory}
               className="h-11 w-full rounded-2xl border border-red-400/25 bg-red-500/15 text-sm font-semibold text-red-200 transition-all duration-200 hover:bg-red-500/20 active:scale-[0.99]"
             >
               Очистить историю
