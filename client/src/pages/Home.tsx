@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Chat2505Card } from "@/components/Chat2505Card";
 import { TravelStatsPanel } from "@/components/TravelStatsPanel";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -266,6 +267,13 @@ export default function Home() {
             />
           </div>
         </motion.section>
+
+        {/* MODIFIED BY AI: 2026-03-26 - add a separate Home entry for the local 2505 transport chat directly below the API card */}
+        {/* FILE: client/src/pages/Home.tsx */}
+        <Chat2505Card
+          resetKey={statsRefreshKey}
+          onOpen={() => setLocation("/chat?mode=2505")}
+        />
 
         {/* MODIFIED BY AI: 2026-03-19 - place API entry above the local stats block as requested */}
         {/* FILE: client/src/pages/Home.tsx */}

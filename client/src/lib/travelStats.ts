@@ -1,6 +1,7 @@
-// MODIFIED BY AI: 2026-03-19 - derive local travel/payment statistics from saved chat history only
+﻿// MODIFIED BY AI: 2026-03-26 - count 2505 rides by real route and plate while keeping api/manual stats intact
 // FILE: client/src/lib/travelStats.ts
 
+import { normalizeChat2505Plate } from "@/lib/chat2505";
 import {
   addDays,
   endOfDay,
@@ -21,12 +22,16 @@ export type TravelPeriod = "day" | "week" | "month" | "year";
 
 type StoredMessage = {
   id: string;
+  text?: string;
   isMe: boolean;
   timestamp: string | Date;
   details?: {
+    kind?: "api" | "2505";
     route?: string;
     number?: string;
     price?: string;
+    transportCode?: string;
+    transportPlate?: string;
   };
 };
 
@@ -71,10 +76,14 @@ const STORAGE_KEY_MESSAGES = "ios_msg_history";
 const SESSION_STORAGE_KEY_MESSAGES = "ios_msg_history_session";
 const STORAGE_KEY_MESSAGES_API = "ios_msg_history_api";
 const SESSION_STORAGE_KEY_MESSAGES_API = "ios_msg_history_api_session";
+const STORAGE_KEY_MESSAGES_2505 = "ios_msg_history_2505";
+const SESSION_STORAGE_KEY_MESSAGES_2505 = "ios_msg_history_2505_session";
 
-const pricePattern = /(\d[\d\s]*)\s*₸/;
+const pricePattern = /(\d[\d\s]*)\s*(?:₸|в‚ё)/;
 
 const readStoredMessages = (sessionKey: string, localKey: string): StoredMessage[] => {
+  if (typeof window === "undefined") return [];
+
   const saved = sessionStorage.getItem(sessionKey) || localStorage.getItem(localKey);
   if (!saved) return [];
 
@@ -100,17 +109,39 @@ const parseAmount = (price: string | undefined) => {
 const toRide = (message: StoredMessage): TravelRide | null => {
   if (message.isMe || !message.details) return null;
 
-  const amount = parseAmount(message.details.price);
+  const is2505Ride = message.details.kind === "2505";
+  const amount = is2505Ride ? 120 : parseAmount(message.details.price);
   if (!amount) return null;
 
   const timestamp = new Date(message.timestamp);
   if (Number.isNaN(timestamp.getTime())) return null;
 
+  const route =
+    (
+      message.details.route ||
+      (is2505Ride ? message.details.transportCode : undefined) ||
+      "—"
+    )
+      .trim() || "—";
+
+  const plate =
+    (is2505Ride
+      ? normalizeChat2505Plate(
+          message.details.number || message.details.transportPlate || "—",
+        )
+      : (
+          message.details.number ||
+          message.details.transportPlate ||
+          "—"
+        )
+          .trim()
+          .toUpperCase()) || "—";
+
   return {
     id: message.id,
     amount,
-    route: (message.details.route || "—").trim() || "—",
-    plate: (message.details.number || "—").trim().toUpperCase() || "—",
+    route,
+    plate,
     timestamp,
   };
 };
@@ -118,8 +149,12 @@ const toRide = (message: StoredMessage): TravelRide | null => {
 export const readTravelRides = (): TravelRide[] => {
   const manualMessages = readStoredMessages(SESSION_STORAGE_KEY_MESSAGES, STORAGE_KEY_MESSAGES);
   const apiMessages = readStoredMessages(SESSION_STORAGE_KEY_MESSAGES_API, STORAGE_KEY_MESSAGES_API);
+  const chat2505Messages = readStoredMessages(
+    SESSION_STORAGE_KEY_MESSAGES_2505,
+    STORAGE_KEY_MESSAGES_2505,
+  );
 
-  return [...manualMessages, ...apiMessages]
+  return [...manualMessages, ...apiMessages, ...chat2505Messages]
     .map((message) => toRide(message))
     .filter((ride): ride is TravelRide => Boolean(ride))
     .sort((left, right) => left.timestamp.getTime() - right.timestamp.getTime());

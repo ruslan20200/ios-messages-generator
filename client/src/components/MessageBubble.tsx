@@ -1,4 +1,4 @@
-// MODIFIED BY AI: 2026-02-12 - tune bubble proportions to match native iMessage scale on mobile
+// MODIFIED BY AI: 2026-03-26 - align 2505 bubble layout and highlighted fields with the original SMS screenshot
 // FILE: client/src/components/MessageBubble.tsx
 
 import { cn } from "@/lib/utils";
@@ -15,7 +15,10 @@ interface MessageBubbleProps {
   isSelected?: boolean;
   isDimmed?: boolean;
   details?: {
-    link: string;
+    kind?: "api" | "2505";
+    link?: string;
+    transportCode?: string;
+    transactionId?: string;
   };
   onOpenActions?: (payload: {
     id: string;
@@ -38,13 +41,15 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const bubbleRef = useRef<HTMLDivElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
+  const is2505Reply = details?.kind === "2505" && !isMe;
+  const isApiReply = details?.kind === "api" && !isMe;
 
   const formatMessageTime = (date: Date) => {
     if (isToday(date)) {
-      return `Сегодня ${format(date, "HH:mm")}`;
+      return `\u0421\u0435\u0433\u043e\u0434\u043d\u044f ${format(date, "HH:mm")}`;
     }
     if (isYesterday(date)) {
-      return `Вчера ${format(date, "HH:mm")}`;
+      return `\u0412\u0447\u0435\u0440\u0430 ${format(date, "HH:mm")}`;
     }
     return format(date, "dd/MM HH:mm");
   };
@@ -59,11 +64,25 @@ export function MessageBubble({
         ? "text-[clamp(14px,4.5vw,17px)]"
         : "text-[clamp(13px,4.2vw,16px)]";
 
-  const renderText = (content: string) => {
-    if (!details) return content;
+  const renderHighlightedValue = (line: string, value?: string) => {
+    if (!value || !line.includes(value)) {
+      return line;
+    }
 
+    const [before, after] = line.split(value);
+
+    return (
+      <>
+        {before}
+        <span className="text-ios-blue underline decoration-ios-blue">{value}</span>
+        {after}
+      </>
+    );
+  };
+
+  const renderText = (content: string) => {
     return content.split("\n").map((line, index) => {
-      if (line.includes("http")) {
+      if (details?.link && line.includes("http")) {
         return (
           <a
             key={index}
@@ -77,6 +96,15 @@ export function MessageBubble({
           </a>
         );
       }
+
+      if (details?.kind === "2505" && index === 3) {
+        return <div key={index}>{renderHighlightedValue(line, details.transportCode)}</div>;
+      }
+
+      if (details?.kind === "2505" && index === 5) {
+        return <div key={index}>{renderHighlightedValue(line, details.transactionId)}</div>;
+      }
+
       return <div key={index}>{line}</div>;
     });
   };
@@ -156,20 +184,29 @@ export function MessageBubble({
               ? "max-w-[40%] px-2.5 py-1.25"
               : isMe
                 ? "max-w-[60%] px-3 py-1.75"
-                : "max-w-[58%] px-3 py-1.75",
+                : is2505Reply
+                  ? "max-w-[76%] px-[15px] py-[12px] sm:max-w-[72%] sm:px-[14px] sm:py-[11px]"
+                  : "max-w-[58%] px-3 py-1.75",
             isMe
               ? "rounded-[22px] rounded-br-[10px] bg-[#2fbe51] text-[#eaf4ec]"
-              : "rounded-[22px] rounded-bl-[10px] bg-[#2a2b34] text-[#f1f2f6]",
+              : is2505Reply
+                ? "rounded-[22px] rounded-bl-[10px] bg-[#232329] text-[#f4f5f8]"
+                : isApiReply
+                  ? "rounded-[22px] rounded-bl-[10px] bg-[#232329] text-[#f1f2f6]"
+                  : "rounded-[22px] rounded-bl-[10px] bg-[#2a2b34] text-[#f1f2f6]",
             isSentCode
               ? cn("leading-[1.04] font-medium tracking-[0.005em]", sentCodeSizeClass)
               : isMe
                 ? "text-[clamp(13px,3.9vw,15px)] leading-[1.22]"
-                : "text-[clamp(15px,4.4vw,17px)] leading-[1.24]",
+                : is2505Reply
+                  ? "text-[clamp(15px,4.45vw,17px)] font-medium leading-[1.28] tracking-[-0.01em] text-[#f4f5f8]"
+                  : "text-[clamp(15px,4.4vw,17px)] leading-[1.24]",
           )}
         >
           <div
             className={cn(
               isMe && "underline decoration-2 underline-offset-[3px] decoration-[#d8eadc]",
+              is2505Reply && "space-y-[2px]",
             )}
           >
             {renderText(text)}
@@ -181,7 +218,9 @@ export function MessageBubble({
               "pointer-events-none absolute -bottom-[1px] h-[12px] w-[14px]",
               isMe ? "-right-[5px]" : "-left-[6px] -scale-x-100",
             )}
-            style={{ color: isMe ? "#2fbe51" : "#2a2b34" }}
+            style={{
+              color: isMe ? "#2fbe51" : is2505Reply || isApiReply ? "#232329" : "#2a2b34",
+            }}
             aria-hidden
           >
             <path

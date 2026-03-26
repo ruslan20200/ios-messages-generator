@@ -1,13 +1,13 @@
-// MODIFIED BY AI: 2026-02-12 - change log with per-file summary and sample diffs
+﻿// MODIFIED BY AI: 2026-02-12 - change log with per-file summary and sample diffs
 // FILE: CHANGES_BY_AI.md
 
 # CHANGES_BY_AI
 
-Дата: 2026-02-12
+Р”Р°С‚Р°: 2026-02-12
 
 ## 1) migrations/001_create_auth_tables.sql
-- Описание: добавлена SQL-миграция таблиц `users`, `sessions`, `admin_actions` + индексы.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅР° SQL-РјРёРіСЂР°С†РёСЏ С‚Р°Р±Р»РёС† `users`, `sessions`, `admin_actions` + РёРЅРґРµРєСЃС‹.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```sql
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS users (
 ```
 
 ## 2) server/db.ts
-- Описание: подключение к PostgreSQL через `DATABASE_URL` (Supabase).
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РїРѕРґРєР»СЋС‡РµРЅРёРµ Рє PostgreSQL С‡РµСЂРµР· `DATABASE_URL` (Supabase).
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 export const pool = new Pool({
   connectionString: databaseUrl,
@@ -31,8 +31,8 @@ export const pool = new Pool({
 ```
 
 ## 3) server/auth.ts
-- Описание: JWT/пароли/cookie helpers (`bcrypt`, `jsonwebtoken`).
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: JWT/РїР°СЂРѕР»Рё/cookie helpers (`bcrypt`, `jsonwebtoken`).
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 export const signAuthToken = (payload: AuthPayload) => {
   const expiresIn = (process.env.JWT_EXPIRES_IN || "7d") as jwt.SignOptions["expiresIn"];
@@ -41,8 +41,8 @@ export const signAuthToken = (payload: AuthPayload) => {
 ```
 
 ## 4) server/accessRules.ts
-- Описание: бизнес-логика для `expires_at` и `device_id` привязки.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: Р±РёР·РЅРµСЃ-Р»РѕРіРёРєР° РґР»СЏ `expires_at` Рё `device_id` РїСЂРёРІСЏР·РєРё.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 export const evaluateDeviceAccess = (params: {
   userDeviceId: string | null;
@@ -52,8 +52,8 @@ export const evaluateDeviceAccess = (params: {
 ```
 
 ## 5) server/accessRules.test.ts
-- Описание: unit-тесты core-логики device/expiry.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: unit-С‚РµСЃС‚С‹ core-Р»РѕРіРёРєРё device/expiry.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 it("denies login from different device", () => {
   const result = evaluateDeviceAccess({ userDeviceId: "device-A", requestDeviceId: "device-B", expiresAt: null });
@@ -62,8 +62,8 @@ it("denies login from different device", () => {
 ```
 
 ## 6) server/cleanupExpired.ts
-- Описание: централизованная очистка просроченных аккаунтов (`deactivate`/`delete`).
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: С†РµРЅС‚СЂР°Р»РёР·РѕРІР°РЅРЅР°СЏ РѕС‡РёСЃС‚РєР° РїСЂРѕСЃСЂРѕС‡РµРЅРЅС‹С… Р°РєРєР°СѓРЅС‚РѕРІ (`deactivate`/`delete`).
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 export const cleanupExpiredUsers = async (mode: CleanupMode = "deactivate") => {
   if (mode === "delete") {
@@ -73,16 +73,16 @@ export const cleanupExpiredUsers = async (mode: CleanupMode = "deactivate") => {
 ```
 
 ## 7) server/scripts/cleanupExpiredUsers.ts
-- Описание: script для ручного/cron запуска cleanup.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: script РґР»СЏ СЂСѓС‡РЅРѕРіРѕ/cron Р·Р°РїСѓСЃРєР° cleanup.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 const rawMode = (process.argv[2] || "deactivate").toLowerCase();
 const mode: CleanupMode = rawMode === "delete" ? "delete" : "deactivate";
 ```
 
 ## 8) server/index.ts
-- Описание: добавлены auth/admin endpoints, rate-limit, auth middleware, cookie+CORS, cleanup endpoint.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅС‹ auth/admin endpoints, rate-limit, auth middleware, cookie+CORS, cleanup endpoint.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 app.post("/auth/login", loginRateLimit, async (req, res) => {
   const { login, password, deviceId } = req.body;
@@ -93,16 +93,16 @@ app.post("/auth/login", loginRateLimit, async (req, res) => {
 ```
 
 ## 9) client/src/lib/deviceId.ts
-- Описание: одноразовая генерация `deviceId` и сохранение в `localStorage`.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РѕРґРЅРѕСЂР°Р·РѕРІР°СЏ РіРµРЅРµСЂР°С†РёСЏ `deviceId` Рё СЃРѕС…СЂР°РЅРµРЅРёРµ РІ `localStorage`.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 const DEVICE_ID_STORAGE_KEY = "ios_msg_device_id";
 export const getOrCreateDeviceId = () => { ... };
 ```
 
 ## 10) client/src/lib/api.ts
-- Описание: единый API-клиент (`credentials: include` + bearer fallback).
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РµРґРёРЅС‹Р№ API-РєР»РёРµРЅС‚ (`credentials: include` + bearer fallback).
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 const response = await fetch(apiUrl(path), {
   ...options,
@@ -112,8 +112,8 @@ const response = await fetch(apiUrl(path), {
 ```
 
 ## 11) client/src/contexts/AuthContext.tsx
-- Описание: состояние авторизации, `login/logout/refreshUser`.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: СЃРѕСЃС‚РѕСЏРЅРёРµ Р°РІС‚РѕСЂРёР·Р°С†РёРё, `login/logout/refreshUser`.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 const response = await apiRequest("/auth/login", {
   method: "POST",
@@ -122,8 +122,8 @@ const response = await apiRequest("/auth/login", {
 ```
 
 ## 12) client/src/pages/Login.tsx
-- Описание: новая страница логина с отправкой `deviceId`.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РЅРѕРІР°СЏ СЃС‚СЂР°РЅРёС†Р° Р»РѕРіРёРЅР° СЃ РѕС‚РїСЂР°РІРєРѕР№ `deviceId`.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 const nextUser = await login({
   login: loginValue,
@@ -133,8 +133,8 @@ const nextUser = await login({
 ```
 
 ## 13) client/src/pages/Admin.tsx
-- Описание: mobile-first админ-панель (users/sessions/create/reset/delete/extend/cleanup).
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: mobile-first Р°РґРјРёРЅ-РїР°РЅРµР»СЊ (users/sessions/create/reset/delete/extend/cleanup).
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 await apiRequest(`/admin/users/${targetUserId}/reset-device`, {
   method: "POST",
@@ -143,8 +143,8 @@ await apiRequest(`/admin/users/${targetUserId}/reset-device`, {
 ```
 
 ## 14) client/src/App.tsx
-- Описание: добавлены маршруты `/login`, `/admin` и route guards.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅС‹ РјР°СЂС€СЂСѓС‚С‹ `/login`, `/admin` Рё route guards.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 <Route path="/admin">
   {() => (
@@ -158,8 +158,8 @@ await apiRequest(`/admin/users/${targetUserId}/reset-device`, {
 ```
 
 ## 15) client/src/main.tsx
-- Описание: подключен `AuthProvider`.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РїРѕРґРєР»СЋС‡РµРЅ `AuthProvider`.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 <AuthProvider>
   <App />
@@ -167,24 +167,24 @@ await apiRequest(`/admin/users/${targetUserId}/reset-device`, {
 ```
 
 ## 16) client/src/vite-env.d.ts
-- Описание: добавлены type refs для PWA virtual module.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅС‹ type refs РґР»СЏ PWA virtual module.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pwa/client" />
 ```
 
 ## 17) .env.example
-- Описание: добавлены env-шаблоны Supabase/JWT/CORS/cookie/rate-limit.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅС‹ env-С€Р°Р±Р»РѕРЅС‹ Supabase/JWT/CORS/cookie/rate-limit.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```env
 DATABASE_URL=postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres
 JWT_SECRET=replace-with-long-random-secret
 ```
 
 ## 18) render.yaml
-- Описание: добавлены переменные окружения для прод-авторизации/БД.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅС‹ РїРµСЂРµРјРµРЅРЅС‹Рµ РѕРєСЂСѓР¶РµРЅРёСЏ РґР»СЏ РїСЂРѕРґ-Р°РІС‚РѕСЂРёР·Р°С†РёРё/Р‘Р”.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```yaml
 - key: DATABASE_URL
   value: ""
@@ -193,29 +193,29 @@ JWT_SECRET=replace-with-long-random-secret
 ```
 
 ## 19) README.md
-- Описание: пошаговые инструкции для Руслана (Supabase, Express, React, тесты, deploy, curl).
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РїРѕС€Р°РіРѕРІС‹Рµ РёРЅСЃС‚СЂСѓРєС†РёРё РґР»СЏ Р СѓСЃР»Р°РЅР° (Supabase, Express, React, С‚РµСЃС‚С‹, deploy, curl).
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```md
-## 1. Что сделать в Supabase (шаги для Руслана)
-1. Открой https://supabase.com и нажми `Start your project`.
+## 1. Р§С‚Рѕ СЃРґРµР»Р°С‚СЊ РІ Supabase (С€Р°РіРё РґР»СЏ Р СѓСЃР»Р°РЅР°)
+1. РћС‚РєСЂРѕР№ https://supabase.com Рё РЅР°Р¶РјРё `Start your project`.
 ```
 ## 20) server/scripts/createAdminUser.ts
-- Описание: script для первоначального создания/обновления первого admin-пользователя.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: script РґР»СЏ РїРµСЂРІРѕРЅР°С‡Р°Р»СЊРЅРѕРіРѕ СЃРѕР·РґР°РЅРёСЏ/РѕР±РЅРѕРІР»РµРЅРёСЏ РїРµСЂРІРѕРіРѕ admin-РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 pnpm tsx server/scripts/createAdminUser.ts admin admin123
 ```
 
 ## 21) package.json
-- Описание: добавлены backend-зависимости (`pg`, `bcryptjs`, `jsonwebtoken`), типы и script `test:server`.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅС‹ backend-Р·Р°РІРёСЃРёРјРѕСЃС‚Рё (`pg`, `bcryptjs`, `jsonwebtoken`), С‚РёРїС‹ Рё script `test:server`.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```json
 "test:server": "vitest run --dir server"
 ```
 
 ## 22) pnpm-lock.yaml
-- Описание: lockfile синхронизирован после фикса зависимостей backend auth/db.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: lockfile СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅ РїРѕСЃР»Рµ С„РёРєСЃР° Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№ backend auth/db.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```yaml
 dependencies:
   pg:
@@ -224,16 +224,16 @@ dependencies:
 ```
 
 ## 23) client/src/contexts/AuthContext.tsx (performance update)
-- Описание: добавлен локальный кэш пользователя (`USER_CACHE_KEY`) для мгновенного открытия интерфейса и фоновой валидации `/auth/me`.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅ Р»РѕРєР°Р»СЊРЅС‹Р№ РєСЌС€ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (`USER_CACHE_KEY`) РґР»СЏ РјРіРЅРѕРІРµРЅРЅРѕРіРѕ РѕС‚РєСЂС‹С‚РёСЏ РёРЅС‚РµСЂС„РµР№СЃР° Рё С„РѕРЅРѕРІРѕР№ РІР°Р»РёРґР°С†РёРё `/auth/me`.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 const [user, setUser] = useState<AuthUser | null>(() => readCachedUser());
 const [isLoading, setIsLoading] = useState(() => readCachedUser() === null);
 ```
 
 ## 24) server/index.ts (Swagger docs update)
-- Описание: расширен OpenAPI для `/docs` - добавлены полные схемы request/response, все auth/admin маршруты и `bearerAuth` для кнопки `Authorize` в Swagger UI.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: СЂР°СЃС€РёСЂРµРЅ OpenAPI РґР»СЏ `/docs` - РґРѕР±Р°РІР»РµРЅС‹ РїРѕР»РЅС‹Рµ СЃС…РµРјС‹ request/response, РІСЃРµ auth/admin РјР°СЂС€СЂСѓС‚С‹ Рё `bearerAuth` РґР»СЏ РєРЅРѕРїРєРё `Authorize` РІ Swagger UI.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```ts
 components: {
   securitySchemes: {
@@ -243,40 +243,40 @@ components: {
 ```
 
 ## 25) client/src/pages/Admin.tsx (Onay tools)
-- Описание: добавлен новый блок `Onay Tools` в админке для тестирования `POST /api/onay/sign-in` и `POST /api/onay/qr-start` прямо из интерфейса.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅ РЅРѕРІС‹Р№ Р±Р»РѕРє `Onay Tools` РІ Р°РґРјРёРЅРєРµ РґР»СЏ С‚РµСЃС‚РёСЂРѕРІР°РЅРёСЏ `POST /api/onay/sign-in` Рё `POST /api/onay/qr-start` РїСЂСЏРјРѕ РёР· РёРЅС‚РµСЂС„РµР№СЃР°.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 <button onClick={handleOnaySignIn}>Refresh token bundle</button>
 <form onSubmit={handleOnayTerminalCheck}>...</form>
 ```
 
 ## 26) client/src/pages/Admin.tsx (sessions refresh)
-- Описание: добавлена кнопка `Refresh` в секции `Sessions and login logs`, отдельное состояние загрузки и отметка времени последнего обновления без перезагрузки всей страницы.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅР° РєРЅРѕРїРєР° `Refresh` РІ СЃРµРєС†РёРё `Sessions and login logs`, РѕС‚РґРµР»СЊРЅРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ Р·Р°РіСЂСѓР·РєРё Рё РѕС‚РјРµС‚РєР° РІСЂРµРјРµРЅРё РїРѕСЃР»РµРґРЅРµРіРѕ РѕР±РЅРѕРІР»РµРЅРёСЏ Р±РµР· РїРµСЂРµР·Р°РіСЂСѓР·РєРё РІСЃРµР№ СЃС‚СЂР°РЅРёС†С‹.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 <button onClick={refreshSessions}>Refresh</button>
 <div>Last update: {sessionsUpdatedAt?.toLocaleTimeString()}</div>
 ```
 
 ## 27) client/src/pages/Login.tsx (UI simplification)
-- Описание: упрощён экран входа: убраны лишние текстовые блоки, заголовок `Login` по центру, placeholder для логина изменён на `name`, добавлен глазок показать/скрыть пароль.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: СѓРїСЂРѕС‰С‘РЅ СЌРєСЂР°РЅ РІС…РѕРґР°: СѓР±СЂР°РЅС‹ Р»РёС€РЅРёРµ С‚РµРєСЃС‚РѕРІС‹Рµ Р±Р»РѕРєРё, Р·Р°РіРѕР»РѕРІРѕРє `Login` РїРѕ С†РµРЅС‚СЂСѓ, placeholder РґР»СЏ Р»РѕРіРёРЅР° РёР·РјРµРЅС‘РЅ РЅР° `name`, РґРѕР±Р°РІР»РµРЅ РіР»Р°Р·РѕРє РїРѕРєР°Р·Р°С‚СЊ/СЃРєСЂС‹С‚СЊ РїР°СЂРѕР»СЊ.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 <input placeholder="name" />
 <button type="button">{showPassword ? <EyeOff /> : <Eye />}</button>
 ```
 
 ## 28) client/src/pages/Admin.tsx (elastic iOS redesign)
-- Описание: обновлён визуальный стиль админки под iOS (glassmorphism/градиенты), улучшена адаптивность mobile-first, добавлены плавные анимации появления секций и карточек через `framer-motion`, усилены touch-friendly контролы.
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РѕР±РЅРѕРІР»С‘РЅ РІРёР·СѓР°Р»СЊРЅС‹Р№ СЃС‚РёР»СЊ Р°РґРјРёРЅРєРё РїРѕРґ iOS (glassmorphism/РіСЂР°РґРёРµРЅС‚С‹), СѓР»СѓС‡С€РµРЅР° Р°РґР°РїС‚РёРІРЅРѕСЃС‚СЊ mobile-first, РґРѕР±Р°РІР»РµРЅС‹ РїР»Р°РІРЅС‹Рµ Р°РЅРёРјР°С†РёРё РїРѕСЏРІР»РµРЅРёСЏ СЃРµРєС†РёР№ Рё РєР°СЂС‚РѕС‡РµРє С‡РµСЂРµР· `framer-motion`, СѓСЃРёР»РµРЅС‹ touch-friendly РєРѕРЅС‚СЂРѕР»С‹.
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 import { AnimatePresence, motion } from "framer-motion";
 <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} />
 ```
 
 ## 29) client/src/pages/Admin.tsx (auto-refresh + skeletons + swipe actions)
-- Описание: добавлены skeleton-заглушки для users/sessions, автообновление сессий каждые 15 секунд с паузой при неактивной вкладке, и swipe-left быстрые действия на карточках пользователей для iOS (mobile).
-- Пример диффа:
+- РћРїРёСЃР°РЅРёРµ: РґРѕР±Р°РІР»РµРЅС‹ skeleton-Р·Р°РіР»СѓС€РєРё РґР»СЏ users/sessions, Р°РІС‚РѕРѕР±РЅРѕРІР»РµРЅРёРµ СЃРµСЃСЃРёР№ РєР°Р¶РґС‹Рµ 15 СЃРµРєСѓРЅРґ СЃ РїР°СѓР·РѕР№ РїСЂРё РЅРµР°РєС‚РёРІРЅРѕР№ РІРєР»Р°РґРєРµ, Рё swipe-left Р±С‹СЃС‚СЂС‹Рµ РґРµР№СЃС‚РІРёСЏ РЅР° РєР°СЂС‚РѕС‡РєР°С… РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РґР»СЏ iOS (mobile).
+- РџСЂРёРјРµСЂ РґРёС„С„Р°:
 ```tsx
 const timer = window.setInterval(() => {
   void refreshSessions({ silent: true });
@@ -342,17 +342,17 @@ if (!terminalDigitsPattern.test(terminal)) {
 - Date: 2026-02-12
 - Diff sample:
 ```tsx
-<h1 className="text-3xl font-bold tracking-tight">Сообщения</h1>
-<p className="text-xs text-gray-500">Для API нажмите «Открыть», для ручного режима нажмите «В чат».</p>
+<h1 className="text-3xl font-bold tracking-tight">РЎРѕРѕР±С‰РµРЅРёСЏ</h1>
+<p className="text-xs text-gray-500">Р”Р»СЏ API РЅР°Р¶РјРёС‚Рµ В«РћС‚РєСЂС‹С‚СЊВ», РґР»СЏ СЂСѓС‡РЅРѕРіРѕ СЂРµР¶РёРјР° РЅР°Р¶РјРёС‚Рµ В«Р’ С‡Р°С‚В».</p>
 ```
 
 ## 36) client/src/pages/Chat.tsx + client/src/components/MessageBubble.tsx (iMessage-like chat UI)
-- Description: Chat composer redesigned to iMessage-like layout (left plus, "Тема" row, divider, "Текстовое сообщение • SMS" input) and mic icon now switches to green send button when input has digits/text; message bubbles restyled with rounded tails, from-bottom animation, and white underline on sent bubble text.
+- Description: Chat composer redesigned to iMessage-like layout (left plus, "РўРµРјР°" row, divider, "РўРµРєСЃС‚РѕРІРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ вЂў SMS" input) and mic icon now switches to green send button when input has digits/text; message bubbles restyled with rounded tails, from-bottom animation, and white underline on sent bubble text.
 - Date: 2026-02-12
 - Diff sample:
 ```tsx
 {canSend ? <ArrowUp ... /> : <Mic ... />}
-<div className="text-[20px] font-semibold text-[#9ea0a9]">Тема</div>
+<div className="text-[20px] font-semibold text-[#9ea0a9]">РўРµРјР°</div>
 ```
 ```tsx
 const isSentCode = isMe && /^\d+$/.test(text.trim()) && text.trim().length <= 8;
@@ -506,7 +506,7 @@ type ExtendUserTerm = "1m" | "3m" | "6m" | "permanent";
 ```
 
 ## 53) client/index.html + client/src/App.tsx (remove startup boot screen)
-- Description: Removed the startup boot/preload card from both raw HTML and React fallbacks. The app now opens without the "Загрузка... / Открываем приложение" card and without a replacement spinner.
+- Description: Removed the startup boot/preload card from both raw HTML and React fallbacks. The app now opens without the "Р—Р°РіСЂСѓР·РєР°... / РћС‚РєСЂС‹РІР°РµРј РїСЂРёР»РѕР¶РµРЅРёРµ" card and without a replacement spinner.
 - Date: 2026-03-19
 - Diff sample:
 ```html
@@ -575,10 +575,10 @@ if (message.isMe || !message.details) return null;
 <TravelStatsPanel refreshKey={statsRefreshKey} />
 ```
 ```tsx
-{showAllRoutes ? "Показать меньше" : `Показать все (${stats.routeStats.length})`}
+{showAllRoutes ? "РџРѕРєР°Р·Р°С‚СЊ РјРµРЅСЊС€Рµ" : `РџРѕРєР°Р·Р°С‚СЊ РІСЃРµ (${stats.routeStats.length})`}
 ```
 ```tsx
-<div className="shrink-0 whitespace-nowrap ...">{stats.rideCount} поездок</div>
+<div className="shrink-0 whitespace-nowrap ...">{stats.rideCount} РїРѕРµР·РґРѕРє</div>
 ```
 
 ## 59) migrations/002_create_onay_credentials.sql + server/onayCredentials.ts + server/index.ts (saved Onay account override)
@@ -637,7 +637,7 @@ className="relative overflow-hidden rounded-xl border border-white/10 bg-[#0b0e1
 ```
 
 ## 63) client/src/App.tsx + client/src/pages/Login.tsx + client/src/pages/Home.tsx + client/src/lib/bootstrapRoute.ts + client/src/pages/Admin.tsx (shared Home entry for admin accounts)
-- Description: Stopped forcing admin accounts straight into `/admin` on login, root redirects, and cached startup. Admin users now open the regular Home screen like everyone else, and Home includes a dedicated "Открыть" entry card above the API section for jumping into the protected admin panel when needed.
+- Description: Stopped forcing admin accounts straight into `/admin` on login, root redirects, and cached startup. Admin users now open the regular Home screen like everyone else, and Home includes a dedicated "РћС‚РєСЂС‹С‚СЊ" entry card above the API section for jumping into the protected admin panel when needed.
 - Date: 2026-03-19
 - Diff sample:
 ```tsx
@@ -645,7 +645,7 @@ navigate("/home", { replace: true });
 ```
 ```tsx
 {user?.role === "admin" ? (
-  <Button onClick={() => setLocation("/admin")}>Открыть</Button>
+  <Button onClick={() => setLocation("/admin")}>РћС‚РєСЂС‹С‚СЊ</Button>
 ) : null}
 ```
 ```ts
@@ -671,11 +671,235 @@ className="relative z-10 ... bg-[linear-gradient(135deg,rgba(16,20,27,0.78),rgba
 - Date: 2026-03-19
 - Diff sample:
 ```tsx
-<Button onClick={() => setShowLogoutConfirm(true)}>Выйти из аккаунта</Button>
+<Button onClick={() => setShowLogoutConfirm(true)}>Р’С‹Р№С‚Рё РёР· Р°РєРєР°СѓРЅС‚Р°</Button>
 ```
 ```tsx
-<button onClick={() => navigate("/home")}>Назад на главный экран</button>
+<button onClick={() => navigate("/home")}>РќР°Р·Р°Рґ РЅР° РіР»Р°РІРЅС‹Р№ СЌРєСЂР°РЅ</button>
 ```
 ```tsx
 {isOnayToolsOpen ? <motion.div key="onay-tools-body">...</motion.div> : null}
+```
+
+## 66) client/src/lib/chat2505.ts + client/src/components/Chat2505Card.tsx + client/src/pages/Home.tsx + client/src/pages/Chat.tsx + client/src/contexts/ChatContext.tsx (new local 2505 transport chat mode)
+- Description: Added a separate local `2505` chat mode under Home, with its own phone/settings storage, searchable transport list, validation, local history, and SMS-style reply generator. The new mode opens through `/chat?mode=2505`, never mixes with the existing `api/manual` histories, and shared history cleanup now also resets the local `2505` data.
+- Date: 2026-03-26
+- Diff sample:
+```ts
+export const CHAT2505_SETTINGS_STORAGE_KEY = "ios_msg_2505_settings";
+```
+```tsx
+<Chat2505Card resetKey={statsRefreshKey} onOpen={() => setLocation("/chat?mode=2505")} />
+```
+```ts
+const mode = queryMode === "api" ? "api" : queryMode === "2505" ? "2505" : "manual";
+```
+
+## 67) client/src/components/MessageBubble.tsx + client/src/lib/chat2505.ts + client/src/lib/chat2505.test.ts + client/src/pages/Chat.tsx (match 2505 SMS bubble to the original layout)
+- Description: Tightened the local `2505` SMS presentation so the generated gray reply matches the reference more closely: fixed multiline labels, restored the centered `РўРµРєСЃС‚РѕРІРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ вЂў SMS` / `РЎРµРіРѕРґРЅСЏ HH:mm` header, highlighted `РўР РђРќРЎРџРћР Рў` and `РўР РђРќР—РђРљР¦РРЇ` in blue with underlines, and tuned the incoming bubble width/spacing for the denser native look.
+- Date: 2026-03-26
+- Diff sample:
+```tsx
+if (details?.kind === "2505" && index === 3) {
+  return <div key={index}>{renderHighlightedValue(line, details.transportCode)}</div>;
+}
+```
+```ts
+`${REPLY_LINES.transport}: ${code} (${plate})`,
+`${REPLY_LINES.transaction}: ${transactionId}`,
+```
+```tsx
+{"\u0422\u0435\u043a\u0441\u0442\u043e\u0432\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u2022 SMS"}
+```
+
+## 68) client/src/pages/Chat.tsx + client/src/components/MessageBubble.tsx + client/src/lib/travelStats.ts (clean mojibake strings, restore API currency sign, and count 2505 rides in stats)
+- Description: Replaced the remaining broken Russian UI strings in the chat screen and long-press action sheet, restored the proper `в‚ё` symbol in API-generated Onay messages, reduced the 2505 header size back to a lighter compact look, showed timestamps for each sent 2505 code again, softened the 2505 reply bubble weight, and extended local travel stats so successful `2505` rides are counted by transport code and plate alongside API rides.
+- Date: 2026-03-26
+- Diff sample:
+```ts
+const price =
+  typeof data.cost === "number"
+    ? `${Math.round(data.cost / 100)}в‚ё`
+    : settings.price || "120в‚ё";
+```
+```tsx
+showTimestamp={msg.isMe}
+```
+```ts
+const chat2505Messages = readStoredMessages(
+  SESSION_STORAGE_KEY_MESSAGES_2505,
+  STORAGE_KEY_MESSAGES_2505,
+);
+```
+
+## 69) client/src/pages/Chat.tsx (hide empty 2505 top header until the first message)
+- Description: Removed the empty `Текстовое сообщение • SMS` placeholder block from the top of the `2505` chat when the conversation has no messages yet. Now the header area stays clean on first open, and only `Сегодня HH:mm` appears after the first sent code creates the conversation.
+- Date: 2026-03-26
+- Diff sample:
+```tsx
+{mode === "2505" && activeMessages.length > 0 ? (
+  <div className="mb-4 pt-0.5 text-center text-[#8E8E93]">
+    <div className="text-[11px] font-medium tracking-[0.01em]">{conversationMetaLabel}</div>
+  </div>
+) : null}
+```
+
+## 70) client/src/pages/Chat.tsx + client/src/components/MessageBubble.tsx (remove duplicated first 2505 timestamp and tune reply bubble spacing)
+- Description: Prevented the first sent `2505` code from repeating the same `Сегодня HH:mm` timestamp that already appears in the compact conversation header. Also darkened the `2505` reply bubble to `#262628` and slightly increased the vertical spacing between reply lines for a cleaner SMS look.
+- Date: 2026-03-26
+- Diff sample:
+```tsx
+showTimestamp={msg.isMe && !(mode === "2505" && index === 0)}
+```
+```tsx
+? "rounded-[22px] rounded-bl-[10px] bg-[#262628] text-[#f1f2f6]"
+```
+
+## 71) client/src/lib/chat2505.ts + client/src/components/Chat2505Card.tsx + client/src/lib/travelStats.ts + client/src/lib/chat2505.test.ts (group 2505 transports by route and show stats by real route/plate)
+- Description: Reworked the `2505` local settings from one flat transport list into route groups. The seeded codes are now stored inside default route `5`, new routes can be created locally, new transport codes can be added into any route, and the settings card shows route count plus total code count with nested expandable lists. Travel stats now count successful `2505` rides by the actual route name and plate instead of treating the transport code as the route.
+- Date: 2026-03-26
+- Diff sample:
+```ts
+export type Chat2505Settings = {
+  phone: string;
+  routes: Chat2505Route[];
+};
+```
+```tsx
+<div className="text-sm font-semibold text-white">
+  Маршрут {route.name}
+</div>
+```
+```ts
+route: message.details.route || message.details.transportCode || "—",
+plate: message.details.number || message.details.transportPlate || "—",
+```
+
+
+## 72) client/src/lib/chat2505.ts (tolerate hidden iPhone keyboard characters in 2505 transport input)
+- Description: Hardened `2505` transport input normalization so codes like `24506(761AJ05)` still validate even if iPhone inserts hidden zero-width or compatibility characters. The parser now applies `NFKC` normalization and strips invisible characters before matching the strict transport format.
+- Date: 2026-03-26
+- Diff sample:
+```ts
+const toUpperCompact = (value: string) =>
+  value
+    .normalize("NFKC")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s\u200B-\u200D\uFEFF]+/g, "");
+```
+
+## 73) client/src/lib/chat2505.ts + client/src/components/Chat2505Card.tsx + client/src/lib/chat2505.test.ts (smart auto-format for 2505 transport input)
+- Description: Made the `2505` transport field smarter on mobile. The input now auto-normalizes and formats transport codes into `24506(761AJ05)` while typing, even if the user enters the value without brackets, with spaces, in lowercase, or with hidden iPhone keyboard characters. The field also disables autocorrect/spellcheck and enables character auto-capitalization for cleaner transport entry.
+- Date: 2026-03-26
+- Diff sample:
+```ts
+expect(formatChat2505TransportDraft("24506761aj05")).toBe("24506(761AJ05)");
+```
+```tsx
+autoCapitalize="characters"
+autoCorrect="off"
+spellCheck={false}
+```
+
+## 74) client/src/lib/chat2505.ts + client/src/components/Chat2505Card.tsx + client/src/lib/chat2505.test.ts (accept both 2505 transport plate variants)
+- Description: Expanded `2505` transport validation to accept the correct `2505` plate format `3 цифры + 2 буквы + 2 цифры`, for example `628ВН05` and `761AJ05`. Updated the UI hint/error text so the accepted formats are explicit, and covered the parser with the corrected examples.
+- Date: 2026-03-26
+- Diff sample:
+```ts
+const TRANSPORT_2505_INPUT_PATTERN =
+  /^(\d{5})\(([0-9]{3}(?:[A-Z\u0410-\u042f\u0401]{3}[0-9]|[A-Z\u0410-\u042f\u0401]{2}[0-9]{2}))\)$/;
+```
+
+## 75) client/src/lib/chat2505.ts + client/src/components/Chat2505Card.tsx + client/src/lib/travelStats.ts + client/src/lib/chat2505.test.ts (lock 2505 plates to 3 digits + 2 letters + 2 digits and normalize old O→0 input)
+- Description: Corrected the `2505` transport plate rule to the final strict format `3 digits + 2 letters + 2 digits`, for example `628ВН05` and `761AJ05`. Seeded route `5` plates, parser tests, UI hints, and travel stats now use this format. Legacy values like `628ВНО5` or `761AJO5` are auto-normalized to `628ВН05` / `761AJ05` when read or typed.
+- Date: 2026-03-26
+- Diff sample:
+```ts
+const TRANSPORT_2505_INPUT_PATTERN =
+  /^(\d{5})\(([0-9]{3}[A-Z\u0410-\u042f\u0401]{2}[0-9]{2})\)$/;
+```
+
+## 76) client/src/components/MessageBubble.tsx + client/src/lib/chat2505.ts + client/src/lib/chat2505.test.ts (match 2505 bubble tail color and lock ticket format to 0ddd:15:dddd)
+- Description: Finished the `2505` SMS visual alignment by tinting the incoming bubble tail with the same `#262628` background as the bubble body. Also changed local ticket generation from a fully random `dddd:dd:dddd` pattern to the fixed shape `0ddd:15:dddd`, so the leading `0` and middle `15` are always present.
+- Date: 2026-03-26
+- Diff sample:
+```tsx
+style={{ color: isMe ? "#2fbe51" : is2505Reply ? "#262628" : "#2a2b34" }}
+```
+```ts
+export const generateChat2505Ticket = () => `0${randomDigits(3)}:15:${randomDigits(4)}`;
+```
+
+## 77) client/src/pages/Chat.tsx (add realistic delayed delivery for local 2505 replies)
+- Description: Made the local `2505` chat feel closer to a real payment flow. Sent codes still appear immediately, but the generated incoming ticket reply now arrives after a short randomized delay (about 1.1s to 2.2s) instead of appearing instantly. The reply bubble timestamp is also stamped at delivery time so the chat feels more natural.
+- Date: 2026-03-26
+- Diff sample:
+```ts
+const CHAT2505_RESPONSE_DELAY_MIN_MS = 1100;
+const CHAT2505_RESPONSE_DELAY_MAX_MS = 2200;
+```
+```ts
+setChat2505Messages((prev) => trimChat2505Messages([...prev, userMessage]));
+schedule2505Response(responseMessage);
+```
+
+## 78) client/src/components/Chat2505Card.tsx (collapse route groups by default and make the Open button blue)
+- Description: Updated the `2505` card on Home so route groups inside the settings panel start collapsed instead of auto-expanding the first route. Also switched the `Открыть` CTA to the same blue action style used elsewhere, while keeping a softer disabled state when the phone or transport list is incomplete.
+- Date: 2026-03-26
+- Diff sample:
+```tsx
+setExpandedRoutes(Object.fromEntries(restored.routes.map((route) => [route.id, false])));
+```
+```tsx
+className="h-10 rounded-xl bg-ios-blue px-4 text-sm font-semibold text-white ..."
+```
+
+## 79) client/src/components/Chat2505Card.tsx + client/src/components/MessageBubble.tsx (fix iPhone 2505 card header wrapping and enlarge 2505 ticket bubble)
+- Description: Reworked the `Чат с 2505` card header into a mobile-first stacked layout so the blue `Открыть` button no longer crowds the title/description on iPhone widths. Also enlarged the incoming `2505` ticket bubble by increasing its width, padding, line spacing, and text size, bringing the local ticket closer to the visual scale of the original SMS reference.
+- Date: 2026-03-26
+- Diff sample:
+```tsx
+<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+```
+```tsx
+? "max-w-[79%] px-[16px] py-[13px] sm:max-w-[74%] sm:px-[15px] sm:py-[12px]"
+```
+
+## 80) client/src/components/Chat2505Card.tsx + client/src/components/MessageBubble.tsx (restore 2505 Open button position, prevent phone overflow, and darken the ticket bubble)
+- Description: Restored the `Открыть` button in the `Чат с 2505` card back to the top-right position while keeping the text area flexible and tightening the phone metric so it no longer spills out on iPhone widths. Also tuned the `2505` incoming ticket bubble closer to the real SMS look by slightly narrowing it, darkening the background, matching the tail tint, and making the text feel denser and more saturated.
+- Date: 2026-03-26
+- Diff sample:
+```tsx
+<div className="min-w-0 flex-1 space-y-1 pr-1">
+```
+```tsx
+? "rounded-[22px] rounded-bl-[10px] bg-[#232329] text-[#f4f5f8]"
+```
+
+## 81) client/src/components/MessageBubble.tsx + client/src/components/Chat2505Card.tsx (soften 2505 text weight, reuse the darker bubble for API replies, and tighten the routes metric label)
+- Description: Reduced the visual heaviness of the `2505` reply text by moving it from semibold to a slightly softer medium weight. Applied the same darker `#232329` incoming bubble/tail treatment to API chat replies for a more consistent look. Also tightened the letter spacing and left alignment of the `Маршрутов` metric label in the `2505` card so it no longer pushes toward the edge on iPhone widths.
+- Date: 2026-03-26
+- Diff sample:
+```tsx
+const isApiReply = details?.kind === "api" && !isMe;
+```
+```tsx
+<div className="pl-[1px] text-[10px] uppercase tracking-[0.2em] text-gray-500">
+  Маршрутов
+</div>
+```
+
+## 82) client/src/pages/Chat.tsx (stabilize iPhone keyboard opening in API chat and lift the composer above the iOS number-key toolbar)
+- Description: Hardened the chat composer positioning on iPhone so the API chat no longer randomly jumps into the wrong place when the numeric keyboard opens. The fix adds a short settling sequence after `focus` to re-sync against delayed `visualViewport` updates and applies an iOS-specific toolbar lift so the composer clears the accessory bar instead of getting trapped underneath it.
+- Date: 2026-03-26
+- Diff sample:
+```ts
+const IOS_KEYBOARD_TOOLBAR_OFFSET = 46;
+const IOS_KEYBOARD_SETTLE_DELAYS_MS = [0, 90, 180, 320, 520, 760];
+```
+```ts
+const composerBottomOffset =
+  keyboardOffset > 0
+    ? keyboardOffset + (isIOSRef.current ? IOS_KEYBOARD_TOOLBAR_OFFSET : 8)
+    : 10;
 ```

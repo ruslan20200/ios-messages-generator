@@ -2,6 +2,14 @@
 // FILE: client/src/pages/Chat.tsx
 
 import { ChatHeader } from "@/components/ChatHeader";
+import {
+  CHAT2505_MESSAGES_SESSION_STORAGE_KEY,
+  CHAT2505_MESSAGES_STORAGE_KEY,
+  createChat2505Conversation,
+  readChat2505Settings,
+  restoreChat2505Messages,
+  trimChat2505Messages,
+} from "@/lib/chat2505";
 import { MessageBubble } from "@/components/MessageBubble";
 import { QrScannerSheet } from "@/components/QrScannerSheet";
 import { useChat, type Message as ChatMessage } from "@/contexts/ChatContext";
@@ -21,8 +29,12 @@ const TERMINAL_DIGITS_PATTERN = /^\d+$/;
 const MAX_PERSISTED_API_MESSAGES = 140;
 const STORAGE_WRITE_DEBOUNCE_MS = 180;
 const DEFAULT_KEYBOARD_MAX_OFFSET = 360;
+const IOS_KEYBOARD_TOOLBAR_OFFSET = 46;
+const IOS_KEYBOARD_SETTLE_DELAYS_MS = [0, 90, 180, 320, 520, 760];
 const ACTION_MENU_WIDTH = 230;
 const ACTION_MENU_HEIGHT = 132;
+const CHAT2505_RESPONSE_DELAY_MIN_MS = 1100;
+const CHAT2505_RESPONSE_DELAY_MAX_MS = 2200;
 
 const runWhenIdle = (task: () => void): (() => void) => {
   const win = window as Window & {
@@ -104,6 +116,9 @@ export default function Chat() {
   const { settings, messages, sendMessage, deleteMessage } = useChat();
   const [inputCode, setInputCode] = useState("");
   const [apiMessages, setApiMessages] = useState<ChatMessage[]>(restoreApiMessages);
+  const [chat2505Messages, setChat2505Messages] = useState<ChatMessage[]>(
+    restoreChat2505Messages,
+  );
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [actionMenu, setActionMenu] = useState<{
     id: string;
@@ -120,19 +135,28 @@ export default function Chat() {
   const inputRef = useRef<HTMLInputElement>(null);
   const isIOSRef = useRef(isIOSDevice());
   const lastSerializedApiMessagesRef = useRef("");
+  const lastSerialized2505MessagesRef = useRef("");
   const viewportBaseHeightRef = useRef(typeof window !== "undefined" ? window.innerHeight : 0);
   const keyboardSyncRef = useRef<() => void>(() => {});
+  const pendingKeyboardSettleTimeoutsRef = useRef<number[]>([]);
+  const pending2505TimeoutsRef = useRef<number[]>([]);
 
-  const mode =
-    new URLSearchParams(window.location.search).get("mode") === "api"
-      ? "api"
-      : "manual";
+  // MODIFIED BY AI: 2026-03-26 - support a third local chat mode for 2505 transport tickets without touching api/manual flows
+  // FILE: client/src/pages/Chat.tsx
+  const queryMode = new URLSearchParams(window.location.search).get("mode");
+  const mode = queryMode === "api" ? "api" : queryMode === "2505" ? "2505" : "manual";
+  const isNumericMode = mode === "api" || mode === "2505";
+  const chatTitle = mode === "2505" ? "2505" : "9909";
+  const activeMessages =
+    mode === "api" ? apiMessages : mode === "2505" ? chat2505Messages : messages;
 
   const badge = (
     <svg
       viewBox="0 0 14 22"
       className="relative -ml-0.5 h-[15px] w-[11px] text-[#6f7078]"
-      aria-label={mode === "api" ? "API mode" : "Manual mode"}
+      aria-label={
+        mode === "api" ? "API mode" : mode === "2505" ? "2505 transport mode" : "Manual mode"
+      }
     >
       <path
         d="M2.5 2.5L10.8 11L2.5 19.5"
@@ -146,6 +170,11 @@ export default function Chat() {
   );
 
   const canSend = inputCode.trim().length > 0;
+  const conversationStartedAt = activeMessages[0]?.timestamp ?? new Date();
+  const conversationMetaLabel = `\u0421\u0435\u0433\u043e\u0434\u043d\u044f ${conversationStartedAt.toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
 
   const generateSuffix = () => {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -156,8 +185,46 @@ export default function Chat() {
     return result;
   };
 
+  const schedule2505Response = (message: ChatMessage) => {
+    const delay =
+      CHAT2505_RESPONSE_DELAY_MIN_MS +
+      Math.floor(
+        Math.random() * (CHAT2505_RESPONSE_DELAY_MAX_MS - CHAT2505_RESPONSE_DELAY_MIN_MS + 1),
+      );
+
+    const timeoutId = window.setTimeout(() => {
+      setChat2505Messages((prev) =>
+        trimChat2505Messages([...prev, { ...message, timestamp: new Date() }]),
+      );
+      pending2505TimeoutsRef.current = pending2505TimeoutsRef.current.filter(
+        (id) => id !== timeoutId,
+      );
+    }, delay);
+
+    pending2505TimeoutsRef.current.push(timeoutId);
+  };
+
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  // MODIFIED BY AI: 2026-03-26 - stabilize iPhone keyboard opening by re-syncing composer position while visualViewport settles
+  // FILE: client/src/pages/Chat.tsx
+  const clearPendingKeyboardSettles = () => {
+    pendingKeyboardSettleTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    pendingKeyboardSettleTimeoutsRef.current = [];
+  };
+
+  const scheduleKeyboardSettleSync = () => {
+    clearPendingKeyboardSettles();
+
+    IOS_KEYBOARD_SETTLE_DELAYS_MS.forEach((delay) => {
+      const timeoutId = window.setTimeout(() => {
+        keyboardSyncRef.current();
+        scrollToBottom("auto");
+      }, delay);
+      pendingKeyboardSettleTimeoutsRef.current.push(timeoutId);
+    });
   };
 
   useEffect(() => {
@@ -165,10 +232,10 @@ export default function Chat() {
   }, [messages]);
 
   useEffect(() => {
-    if (mode === "api") {
+    if (mode === "api" || mode === "2505") {
       scrollToBottom();
     }
-  }, [apiMessages, mode]);
+  }, [apiMessages, chat2505Messages, mode]);
 
   useEffect(() => {
     if (isIOSRef.current) return;
@@ -186,6 +253,10 @@ export default function Chat() {
     const handleStorage = (event: StorageEvent) => {
       if (event.key === API_STORAGE_KEY && event.newValue === null) {
         setApiMessages([]);
+      }
+
+      if (event.key === CHAT2505_MESSAGES_STORAGE_KEY && event.newValue === null) {
+        setChat2505Messages([]);
       }
     };
 
@@ -217,6 +288,31 @@ export default function Chat() {
       cancelIdle();
     };
   }, [apiMessages, mode]);
+
+  useEffect(() => {
+    if (mode !== "2505") return;
+    const trimmedMessages = trimChat2505Messages(chat2505Messages);
+    const serialized = JSON.stringify(trimmedMessages);
+
+    if (lastSerialized2505MessagesRef.current === serialized) {
+      return;
+    }
+
+    lastSerialized2505MessagesRef.current = serialized;
+    sessionStorage.setItem(CHAT2505_MESSAGES_SESSION_STORAGE_KEY, serialized);
+
+    let cancelIdle = () => {};
+    const timer = window.setTimeout(() => {
+      cancelIdle = runWhenIdle(() => {
+        localStorage.setItem(CHAT2505_MESSAGES_STORAGE_KEY, serialized);
+      });
+    }, STORAGE_WRITE_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      cancelIdle();
+    };
+  }, [chat2505Messages, mode]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -304,6 +400,14 @@ export default function Chat() {
     };
   }, [actionMenu]);
 
+  useEffect(() => {
+    return () => {
+      clearPendingKeyboardSettles();
+      pending2505TimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      pending2505TimeoutsRef.current = [];
+    };
+  }, []);
+
   const appendApi = (msg: ChatMessage) => {
     setApiMessages((prev) => {
       const next = [...prev, msg];
@@ -355,9 +459,9 @@ export default function Chat() {
 
     try {
       await navigator.clipboard.writeText(actionMenu.text);
-      toast.success("Скопировано");
+      toast.success("\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e");
     } catch {
-      toast.error("Не удалось скопировать сообщение");
+      toast.error("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435");
     } finally {
       closeActionMenu();
     }
@@ -368,11 +472,13 @@ export default function Chat() {
 
     if (mode === "api") {
       setApiMessages((prev) => prev.filter((message) => message.id !== actionMenu.id));
+    } else if (mode === "2505") {
+      setChat2505Messages((prev) => prev.filter((message) => message.id !== actionMenu.id));
     } else {
       deleteMessage(actionMenu.id);
     }
 
-    toast.success("Сообщение удалено");
+    toast.success("\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u0443\u0434\u0430\u043b\u0435\u043d\u043e");
     closeActionMenu();
   };
 
@@ -389,12 +495,47 @@ export default function Chat() {
       return;
     }
 
+    // MODIFIED BY AI: 2026-03-26 - generate local 2505 transport SMS replies from saved phone/transport settings
+    // FILE: client/src/pages/Chat.tsx
+    if (mode === "2505") {
+      setInputCode("");
+
+      if (!/^\d{5}$/.test(text)) {
+        const errMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          text: "\u041e\u0448\u0438\u0431\u043a\u0430. \u0412\u0432\u0435\u0434\u0438\u0442\u0435 5 \u0446\u0438\u0444\u0440 \u043a\u043e\u0434\u0430 \u0442\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442\u0430.",
+          isMe: false,
+          timestamp: new Date(),
+        };
+        setChat2505Messages((prev) => trimChat2505Messages([...prev, errMsg]));
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 10);
+        return;
+      }
+
+      const settings2505 = readChat2505Settings();
+      const { userMessage, responseMessage } = createChat2505Conversation({
+        code: text,
+        settings: settings2505,
+        now: new Date(),
+      });
+
+      setChat2505Messages((prev) => trimChat2505Messages([...prev, userMessage]));
+      schedule2505Response(responseMessage);
+
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 10);
+      return;
+    }
+
     // MODIFIED BY AI: 2026-02-12 - block non-digit terminal codes in API mode and show explicit error
     // FILE: client/src/pages/Chat.tsx
     if (!TERMINAL_DIGITS_PATTERN.test(text)) {
       const errMsg: ChatMessage = {
         id: crypto.randomUUID(),
-        text: "Ошибка. Для запроса вводите только цифры.",
+        text: "\u041e\u0448\u0438\u0431\u043a\u0430. \u0414\u043b\u044f \u0437\u0430\u043f\u0440\u043e\u0441\u0430 \u0432\u0432\u043e\u0434\u0438\u0442\u0435 \u0442\u043e\u043b\u044c\u043a\u043e \u0446\u0438\u0444\u0440\u044b.",
         isMe: false,
         timestamp: new Date(),
       };
@@ -430,7 +571,7 @@ export default function Chat() {
 
       const body = await resp.json();
       if (!resp.ok || !body.success) {
-        throw new Error(body?.message || `Код отклонён (${resp.status})`);
+        throw new Error(body?.message || `\u041a\u043e\u0434 \u043e\u0442\u043a\u043b\u043e\u043d\u0451\u043d (${resp.status})`);
       }
 
       const data = body.data || {};
@@ -439,7 +580,7 @@ export default function Chat() {
       if (isEmptyPayload) {
         const errMsg: ChatMessage = {
           id: crypto.randomUUID(),
-          text: "Ошибка. Услуга временно недоступна, попробуйте позже.",
+          text: "\u041e\u0448\u0438\u0431\u043a\u0430. \u0423\u0441\u043b\u0443\u0433\u0430 \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430, \u043f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0437\u0436\u0435.",
           isMe: false,
           timestamp: new Date(),
         };
@@ -447,12 +588,12 @@ export default function Chat() {
         return;
       }
 
-      const route = data.route || "—";
-      const plate = data.plate || "—";
+      const route = data.route || "\u2014";
+      const plate = data.plate || "\u2014";
       const price =
         typeof data.cost === "number"
-          ? `${Math.round(data.cost / 100)}₸`
-          : settings.price || "120₸";
+          ? `${Math.round(data.cost / 100)}\u20b8`
+          : settings.price || "120\u20b8";
 
       const suffix = generateSuffix();
       const formattedDate = new Date().toLocaleString("ru-RU", {
@@ -481,10 +622,10 @@ export default function Chat() {
       const message =
         error instanceof Error
           ? error.message
-          : "Код неверный или сервис недоступен";
+          : "\u041a\u043e\u0434 \u043d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u0438\u043b\u0438 \u0441\u0435\u0440\u0432\u0438\u0441 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d";
       const errMsg: ChatMessage = {
         id: crypto.randomUUID(),
-        text: `Ошибка. ${message}`,
+        text: `\u041e\u0448\u0438\u0431\u043a\u0430. ${message}`,
         isMe: false,
         timestamp: new Date(),
       };
@@ -497,17 +638,19 @@ export default function Chat() {
   };
 
   const handleTerminalDetected = (terminalId: string) => {
-    setInputCode(terminalId);
+    const nextValue =
+      mode === "2505" ? terminalId.replace(/\D+/g, "").slice(0, 5) : terminalId;
+    setInputCode(nextValue);
 
     const autoSendEnabled = mode === "api" && settings.autoScan === true;
-    toast.success("QR распознан", {
+    toast.success("QR \u0440\u0430\u0441\u043f\u043e\u0437\u043d\u0430\u043d", {
       description: autoSendEnabled
-        ? `Terminal ID: ${terminalId}. Отправляем автоматически...`
-        : `Terminal ID: ${terminalId}`,
+        ? `Terminal ID: ${nextValue}. \u041e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u043c \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438...`
+        : `Terminal ID: ${nextValue}`,
     });
 
     if (autoSendEnabled) {
-      void handleSendText(terminalId);
+      void handleSendText(nextValue);
       return;
     }
 
@@ -521,26 +664,39 @@ export default function Chat() {
     await handleSendText(inputCode);
   };
 
+  const composerBottomOffset =
+    keyboardOffset > 0
+      ? keyboardOffset + (isIOSRef.current ? IOS_KEYBOARD_TOOLBAR_OFFSET : 8)
+      : 10;
+  const composerPaddingBottom = 108 + composerBottomOffset;
+
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-black text-white">
-      <ChatHeader title="9909" badge={badge} />
+      <ChatHeader title={chatTitle} badge={badge} />
 
       <div
         className="flex-1 overflow-y-auto px-3.5 pt-[148px] space-y-1 scroll-smooth"
         style={{
           WebkitOverflowScrolling: "touch",
           overscrollBehaviorY: "contain",
-          paddingBottom: 118 + keyboardOffset,
+          paddingBottom: composerPaddingBottom,
         }}
       >
-        {(mode === "api" ? apiMessages : messages).map((msg) => (
+        {/* MODIFIED BY AI: 2026-03-26 - hide the empty 2505 header until the first sent code creates a conversation */}
+        {mode === "2505" && activeMessages.length > 0 ? (
+          <div className="mb-4 pt-0.5 text-center text-[#8E8E93]">
+            <div className="text-[11px] font-medium tracking-[0.01em]">{conversationMetaLabel}</div>
+          </div>
+        ) : null}
+
+        {activeMessages.map((msg, index) => (
           <MessageBubble
             key={msg.id}
             id={msg.id}
             text={msg.text}
             isMe={msg.isMe}
             timestamp={msg.timestamp}
-            showTimestamp={msg.isMe}
+            showTimestamp={msg.isMe && !(mode === "2505" && index === 0)}
             isSelected={actionMenu?.id === msg.id}
             isDimmed={Boolean(actionMenu)}
             details={msg.details}
@@ -555,7 +711,7 @@ export default function Chat() {
       <div
         className="fixed left-0 right-0 z-50 safe-area-bottom"
         style={{
-          bottom: keyboardOffset > 0 ? keyboardOffset + 8 : 10,
+          bottom: composerBottomOffset,
           paddingBottom: keyboardOffset > 0 ? 0 : undefined,
         }}
       >
@@ -563,7 +719,7 @@ export default function Chat() {
           <button
             type="button"
             className="mb-0.5 flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full border border-white/18 bg-[#2b2c31] text-white shadow-[0_4px_12px_rgba(0,0,0,0.27)] transition-colors hover:bg-[#34353b]"
-            aria-label="Добавить"
+            aria-label={"\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c"}
             onClick={() => setIsScannerOpen(true)}
           >
             <Plus size={21} strokeWidth={2.2} />
@@ -571,7 +727,7 @@ export default function Chat() {
 
           <form onSubmit={handleSend} className="flex-1">
             <div className="rounded-[21px] border border-white/18 bg-[#313239]/95 px-3 pb-1.5 pt-1.75 shadow-[0_6px_14px_rgba(0,0,0,0.3)] backdrop-blur-xl">
-              <div className="text-[clamp(18px,3.6vw,15px)] font-medium text-[#9ea0a9]">Тема</div>
+              <div className="text-[clamp(18px,3.6vw,15px)] font-medium text-[#9ea0a9]">{"\u0422\u0435\u043c\u0430"}</div>
               <div className="mt-0.75 h-px bg-white/20" />
 
               <div className="mt-0.75 flex items-center gap-1">
@@ -581,28 +737,24 @@ export default function Chat() {
                   value={inputCode}
                   onChange={(event) => {
                     const nextValue = event.target.value;
-                    setInputCode(mode === "api" ? nextValue.replace(/\D+/g, "") : nextValue);
+                    setInputCode(isNumericMode ? nextValue.replace(/\D+/g, "") : nextValue);
                   }}
-                  inputMode={mode === "api" ? "numeric" : "text"}
-                  pattern={mode === "api" ? "[0-9]*" : undefined}
+                  inputMode={isNumericMode ? "numeric" : "text"}
+                  pattern={isNumericMode ? "[0-9]*" : undefined}
+                  maxLength={mode === "2505" ? 5 : undefined}
                   onFocus={() => {
                     setIsInputFocused(true);
-                    keyboardSyncRef.current();
-                    window.requestAnimationFrame(() => {
-                      keyboardSyncRef.current();
-                      scrollToBottom("auto");
-                    });
-                    window.setTimeout(() => {
-                      keyboardSyncRef.current();
-                      scrollToBottom("auto");
-                    }, 120);
-                    window.setTimeout(() => {
-                      keyboardSyncRef.current();
-                      scrollToBottom("auto");
-                    }, 260);
+                    scheduleKeyboardSettleSync();
                   }}
-                  onBlur={() => setIsInputFocused(false)}
-                  placeholder={mode === "api" ? "Текстовое сообщение • SMS" : "Текстовое сообщение • iMessage"}
+                  onBlur={() => {
+                    setIsInputFocused(false);
+                    clearPendingKeyboardSettles();
+                  }}
+                  placeholder={
+                    mode === "api" || mode === "2505"
+                      ? "\u0422\u0435\u043a\u0441\u0442\u043e\u0432\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u2022 SMS"
+                      : "\u0422\u0435\u043a\u0441\u0442\u043e\u0432\u043e\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u2022 iMessage"
+                  }
                   className="h-[30px] flex-1 bg-transparent text-[clamp(12px,3.8vw,15px)] font-medium text-white placeholder:text-[clamp(12px,3.8vw,15px)] placeholder:text-[#8f9199] focus:outline-none"
                 />
 
@@ -610,7 +762,7 @@ export default function Chat() {
                   <button
                     type="submit"
                     className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-full bg-[#32d957] text-white shadow-[0_4px_8px_rgba(50,217,87,0.28)] transition-all duration-150 active:scale-[0.97]"
-                    aria-label="Отправить"
+                    aria-label={"\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c"}
                   >
                     <ArrowUp size={17} strokeWidth={2.8} />
                   </button>
@@ -618,7 +770,7 @@ export default function Chat() {
                   <button
                     type="button"
                     className="pr-0.5 text-[#8f9199] transition-colors hover:text-[#b7b9c3]"
-                    aria-label="Микрофон"
+                    aria-label={"\u041c\u0438\u043a\u0440\u043e\u0444\u043e\u043d"}
                   >
                     <Mic size={19} strokeWidth={2.1} />
                   </button>
@@ -646,7 +798,7 @@ export default function Chat() {
               transition={{ duration: 0.16 }}
               className="fixed inset-0 z-[120] bg-black/18 backdrop-blur-[1px]"
               onClick={closeActionMenu}
-              aria-label="Закрыть меню"
+              aria-label={"\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u043c\u0435\u043d\u044e"}
             />
 
             <motion.div
@@ -662,7 +814,7 @@ export default function Chat() {
                 className="flex w-full items-center rounded-[14px] px-3 py-2.5 text-left text-[17px] font-medium text-[#f2f4fa] transition-colors hover:bg-white/8"
                 onClick={handleCopyMessage}
               >
-                Скопировать
+                {"\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c"}
               </button>
 
               <div className="my-1 h-px bg-white/10" />
@@ -672,7 +824,7 @@ export default function Chat() {
                 className="flex w-full items-center rounded-[14px] px-3 py-2.5 text-left text-[17px] font-medium text-[#ff8585] transition-colors hover:bg-white/8"
                 onClick={handleDeleteMessage}
               >
-                Удалить
+                {"\u0423\u0434\u0430\u043b\u0438\u0442\u044c"}
               </button>
             </motion.div>
           </>

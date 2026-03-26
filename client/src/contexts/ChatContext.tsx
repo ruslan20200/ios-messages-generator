@@ -1,3 +1,7 @@
+// MODIFIED BY AI: 2026-03-26 - include local 2505 chat storage in the shared history cleanup path
+// FILE: client/src/contexts/ChatContext.tsx
+
+import { clearChat2505Storage } from "@/lib/chat2505";
 import { addMinutes, format } from "date-fns";
 import { nanoid } from "nanoid";
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
@@ -8,11 +12,15 @@ export interface Message {
   isMe: boolean;
   timestamp: Date;
   details?: {
-    route: string;
-    number: string;
-    price: string;
-    suffix: string;
-    link: string;
+    kind?: "api" | "2505";
+    route?: string;
+    number?: string;
+    price?: string;
+    suffix?: string;
+    link?: string;
+    transportCode?: string;
+    transportPlate?: string;
+    transactionId?: string;
   };
 }
 
@@ -200,6 +208,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(STORAGE_KEY_MESSAGES_API);
     sessionStorage.removeItem(SESSION_STORAGE_KEY_MESSAGES);
     sessionStorage.removeItem("ios_msg_history_api_session");
+    clearChat2505Storage();
     setMessages([]);
   };
 
