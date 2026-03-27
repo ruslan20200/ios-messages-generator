@@ -204,22 +204,44 @@ function Router() {
 
 function App() {
   useEffect(() => {
-    // MODIFIED BY AI: 2026-03-19 - warm essential mobile routes earlier so cached screens open fast on weak/offline networks
+    // MODIFIED BY AI: 2026-03-27 - move route warmup to browser idle after load so startup stays lighter without removing prefetching
     // FILE: client/src/App.tsx
-    const warmupTimer = window.setTimeout(() => {
-      void loadLoginPage();
-      void loadChatPage();
-      void loadHomePage();
-    }, shouldPrefetchLightRoutes() ? 80 : 220);
+    const cancelers: Array<() => void> = [];
+    let cancelled = false;
 
-    const cancelIdle = runWhenIdle(() => {
-      void loadAdminPage();
-      void loadQrPage();
-    });
+    const startWarmup = () => {
+      if (cancelled) return;
+
+      cancelers.push(
+        runWhenIdle(() => {
+          void loadLoginPage();
+          void loadHomePage();
+
+          if (shouldPrefetchLightRoutes()) {
+            void loadChatPage();
+          }
+
+          cancelers.push(
+            runWhenIdle(() => {
+              void loadAdminPage();
+              void loadQrPage();
+            }),
+          );
+        }),
+      );
+    };
+
+    if (document.readyState === "complete") {
+      startWarmup();
+    } else {
+      const handleLoad = () => startWarmup();
+      window.addEventListener("load", handleLoad, { once: true });
+      cancelers.push(() => window.removeEventListener("load", handleLoad));
+    }
 
     return () => {
-      window.clearTimeout(warmupTimer);
-      cancelIdle();
+      cancelled = true;
+      cancelers.forEach((cancel) => cancel());
     };
   }, []);
 

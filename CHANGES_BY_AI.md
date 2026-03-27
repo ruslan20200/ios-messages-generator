@@ -903,3 +903,272 @@ const composerBottomOffset =
     ? keyboardOffset + (isIOSRef.current ? IOS_KEYBOARD_TOOLBAR_OFFSET : 8)
     : 10;
 ```
+
+## 83) client/src/pages/Home.tsx (show current user name and account period status in the top Messages header)
+- Description: Personalized the top `Сообщения` header on Home by surfacing the current user login and a compact account period badge. The header now shows whether the account is permanent, active until a specific date, expired, or has an unreadable period value, so users can immediately see their access status without opening the admin panel.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+const accountPeriod = useMemo(() => {
+  if (!user?.expiresAt) {
+    return { title: "Бессрочный", subtitle: "Без ограничения по времени" };
+  }
+```
+```tsx
+<div className="text-[11px] uppercase tracking-[0.22em] text-gray-500">Период</div>
+<div className={`mt-1 text-[14px] font-semibold ${accountPeriod.toneClass}`}>
+  {accountPeriod.title}
+</div>
+```
+
+## 84) client/src/pages/Home.tsx (remove mojibake from Home labels and normalize the тенге sign)
+- Description: Cleaned the remaining broken Cyrillic on the Home screen by rewriting visible labels, button texts, helper descriptions, and Onay toasts with stable UTF-8/Unicode-escaped strings. Also normalized the stored manual price so older malformed values like `120в‚ё` are converted back into a proper `120₸` display.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+const [price, setPrice] = useState(() => {
+  const rawPrice = settings.price || "120";
+  const normalizedDigits = rawPrice.replace(/\D+/g, "");
+  return `${normalizedDigits || "120"}₸`;
+});
+```
+```tsx
+<div className="text-base font-semibold">{"Чат через API"}</div>
+```
+
+## 85) client/src/components/UpdateNotice.tsx (replace the onboarding instructions with a mandatory lawful-use agreement)
+- Description: Replaced the old “how to use the app” onboarding card with a mandatory lawful-use agreement screen. Users must actively confirm a checkbox before the app becomes available. The agreement now explains that the service must be used only within the law, that the user is personally responsible for their actions and consequences, and that the text is informational rather than legal advice. The separate “What’s new” notice still works after agreement acceptance.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+const AGREEMENT_STORAGE_KEY = "ios_msg_seen_agreement_id";
+const LEGAL_AGREEMENT_VERSION = "2026-03-27-lawful-use-kz";
+```
+```tsx
+<Checkbox
+  id="lawful-use-consent"
+  checked={agreed}
+  onCheckedChange={(checked) => setAgreed(checked === true)}
+/>
+```
+
+## 86) client/src/pages/Home.tsx (replace the short mode hint with a collapsible step-by-step instruction block)
+- Description: Removed the two short helper lines under the Home header and replaced them with a collapsible `Инструкция` section. The new guide explains, in simple language, how to use the API chat, the local `2505` chat, the manual mode, and where to find key actions such as clearing local history. The instructions stay hidden by default so the header remains compact, but they can be expanded when the user needs help.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+const [isGuideOpen, setIsGuideOpen] = useState(false);
+```
+```tsx
+<div className="text-sm font-semibold text-white">1. Чат через API</div>
+<div className="mt-1 text-xs leading-5 text-gray-400">
+  Нажмите «Открыть», если хотите получить данные из Onay автоматически.
+</div>
+```
+
+## 87) client/src/pages/Home.tsx (animate the instruction accordion and add a safe password-status card under the account info)
+- Description: Upgraded the Home header card with a smoother `Инструкция` accordion using `AnimatePresence` and height/opacity transitions, so expanding and collapsing feels lighter and more polished. Also added a dedicated `Просмотр пароля` status block under the account tiles. Because the app does not retain the real password after login, this block now explains that password viewing is unavailable post-authentication instead of pretending the password can be revealed.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+import { EyeOff } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+```
+```tsx
+<div className="text-[11px] uppercase tracking-[0.22em] text-gray-500">{"\\u041f\\u0440\\u043e\\u0441\\u043c\\u043e\\u0442\\u0440 \\u043f\\u0430\\u0440\\u043e\\u043b\\u044f"}</div>
+<div className="mt-1 text-[14px] font-semibold text-white">{"\\u041d\\u0435\\u0434\\u043e\\u0441\\u0442\\u0443\\u043f\\u043d\\u043e \\u043f\\u043e\\u0441\\u043b\\u0435 \\u0432\\u0445\\u043e\\u0434\\u0430"}</div>
+```
+
+## 88) client/src/pages/Home.tsx (fix the instruction toggle so only the chevron rotates)
+- Description: Corrected the instruction toggle pill in the Home header. Previously the entire badge was rotated, which flipped the `Скрыть` text upside down when the accordion opened. The control now keeps the label readable at all times and rotates only a dedicated chevron icon.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+import { ChevronDown, EyeOff } from "lucide-react";
+```
+```tsx
+<motion.span animate={{ rotate: isGuideOpen ? 180 : 0 }}>
+  <ChevronDown size={14} />
+</motion.span>
+```
+
+## 89) client/src/lib/rememberedPassword.ts + client/src/pages/Login.tsx + client/src/pages/Home.tsx (add opt-in remember-and-show-password on this device)
+- Description: Added an explicit opt-in flow for saving a password locally on the current device. The login screen now includes a `Запомнить пароль на этом устройстве` checkbox, restores the last remembered credentials when available, and stores or removes the password per login based on the user’s choice. The Home header now shows a password device-status card where the remembered password can be shown, hidden, or deleted from local storage, with a warning that local storage is less safe than not storing it at all.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+const [rememberPasswordEnabled, setRememberPasswordEnabled] = useState(false);
+```
+```tsx
+{rememberedPassword ? (
+  <button type="button" onClick={() => setShowRememberedPassword((prev) => !prev)}>
+    {showRememberedPassword ? "Скрыть" : "Показать"}
+  </button>
+) : null}
+```
+
+## 90) server/index.ts + client/src/pages/Admin.tsx (add admin password reset flow without exposing current passwords)
+- Description: Added a safe admin password-management flow. Admins can now open a `Set new password` dialog for any user directly from the Users list and submit a replacement password with a visibility toggle. The server now exposes `POST /admin/users/:id/password`, hashes the new password, invalidates the target user’s other sessions, and writes an admin action log. The current plaintext password is intentionally not viewable because the system stores only hashes.
+- Date: 2026-03-27
+- Diff sample:
+```ts
+app.post("/admin/users/:id/password", requireAuth, requireAdmin, async (req, res) => {
+  const passwordHash = await hashPassword(password);
+});
+```
+```tsx
+<DialogTitle>Set new password</DialogTitle>
+<DialogDescription className="text-gray-400">
+  Current password cannot be viewed because the system stores only a hash.
+</DialogDescription>
+```
+
+## 91) client/src/pages/Home.tsx (move admin access into the compact account header block)
+- Description: Removed the separate full-width admin panel card from Home and moved admin access into the compact top account area. Admin users now see a small clickable access tile directly under the `Имя / Период` cards, with an `admin` badge and a one-tap entry into the admin panel. This keeps the Home screen tighter and makes the admin path visible right where the account summary already lives.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+{user?.role === "admin" ? (
+  <button type="button" onClick={() => setLocation("/admin")}>
+    <span>admin</span>
+    <span>Открыть админ панель</span>
+  </button>
+) : null}
+```
+
+## 92) vite.config.ts + client/src/main.tsx + client/src/App.tsx + client/src/components/QrScannerSheet.tsx + server/index.ts (site-wide startup and caching optimization without visual changes)
+- Description: Optimized the app startup path and repeat-load performance without changing the UI. Production builds now skip dev-only location/runtime plugins, removing `data-loc` attributes from shipped bundles. Vendor code is split into smaller chunks, service worker registration is deferred until load/idle, QR decoding is lazy-loaded only when the scanner is actually opened, and Express now sends stronger cache headers for static assets. Route warmup still exists, but it now runs during browser idle after page load so it no longer competes with the first screen render.
+- Date: 2026-03-27
+- Diff sample:
+```ts
+!isProductionBuild ? jsxLocPlugin() : null,
+!isProductionBuild ? vitePluginManusRuntime() : null,
+```
+```ts
+const { default: jsQR } = await loadJsQr();
+```
+```ts
+res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+```
+
+## 93) client/src/lib/travelStats.ts + client/src/components/TravelStatsPanel.tsx (add date picker and exact day zoom for travel spend analytics)
+- Description: Expanded the local travel analytics so the user can anchor stats to a specific date instead of only looking at today/current week/current month. The stats engine now accepts a selected date, clamps all ranges to the supported window from January 1, 2025 through today, and localizes weekly/monthly labels. The Travel Stats panel now has a calendar trigger, a date picker dialog, and a `Приблизить` mode for daily analytics that swaps the hourly overview for exact payment times with a detailed list of rides and timestamps.
+- Date: 2026-03-27
+- Diff sample:
+```ts
+export const buildTravelStats = (
+  period: TravelPeriod,
+  options?: { anchorDate?: Date },
+): TravelStats => {
+```
+```tsx
+<button type="button" onClick={() => setIsCalendarOpen(true)}>
+  <CalendarDays className="size-3.5" />
+  <span>{selectedDateLabel}</span>
+</button>
+```
+```tsx
+{period === "day" && isDayZoomed && stats.filteredRides.length > 0 ? (
+  <div className="mt-3 rounded-[20px] border border-white/8 bg-[#0c1119]/88 p-3">
+```
+
+## 94) client/src/pages/Home.tsx (make the top Messages account block collapsible and remember its state locally)
+- Description: Turned the top `Сообщения` header card into a smooth collapsible section. The user can now fold or expand the whole account summary block, and the chosen state is saved in local storage so it stays the same after refreshes and later visits. The toggle uses the same soft motion language as the rest of the page and keeps the layout compact when the user wants more space on the Home screen.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+const HOME_HEADER_OPEN_KEY = "ios_home_header_open";
+const [isHomeHeaderOpen, setIsHomeHeaderOpen] = useState(() => {
+  const saved = window.localStorage.getItem(HOME_HEADER_OPEN_KEY);
+  return saved === null ? true : saved === "true";
+});
+```
+```tsx
+<AnimatePresence initial={false}>
+  {isHomeHeaderOpen ? (
+    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}>
+```
+
+## 95) client/src/lib/travelStats.ts + client/src/components/TravelStatsPanel.tsx (make the spend dynamics chart easier to read and switch weekly labels to English)
+- Description: Refined the `Динамика трат` block so it reads more clearly at a glance. Weekly labels now use English weekday abbreviations instead of short Russian labels, which makes the week chart easier to parse visually. The panel also now explains the line better with a clearer subtitle and a compact summary strip under the chart showing the peak point, average value, and latest non-zero payment, so the user can understand the trend without guessing from the line alone.
+- Date: 2026-03-27
+- Diff sample:
+```ts
+import { enUS, ru } from "date-fns/locale";
+```
+```ts
+label: format(bucketDate, "EEE", { locale: enUS }).toUpperCase(),
+```
+```tsx
+<div className="mt-3 grid grid-cols-3 gap-2">
+  {chartSummary.map((item) => (
+    <ChartMetric key={item.label} label={item.label} value={item.value} />
+  ))}
+</div>
+```
+
+## 96) client/src/components/TravelStatsPanel.tsx (remove redundant 120 KZT hints and make the chart summary more meaningful)
+- Description: Simplified the spend overview for a fixed-fare flow where each successful ride is always `120 ₸`. The top summary no longer shows `средний чек`, because it did not add useful information, and the small chip in the hero card now shows the latest active point instead of a redundant peak amount. The chart summary under `Динамика трат` was also redesigned to show clearer signals: `Пик`, `Оплат`, and `Последняя`, each with short helper text, so the block is easier to understand without repeating the fixed fare.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+<div className="mt-2 text-sm text-white/60">
+  {formatPaymentCount(stats.rideCount)} {"\u0437\u0430 \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u043f\u0435\u0440\u0438\u043e\u0434"}
+</div>
+```
+```tsx
+<ChartMetric
+  key={item.label}
+  label={item.label}
+  value={item.value}
+  hint={item.hint}
+/>
+```
+
+## 97) client/src/components/TravelStatsPanel.tsx (replace remaining mojibake separators in travel stats with a proper bullet)
+- Description: Cleaned up the last broken `вЂў` separators inside the travel statistics panel. Route summaries and the exact-payments list now use a normal bullet `•`, so the details under `Точные оплаты` and the route/plate hints render cleanly on the page instead of showing mojibake.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+{"\u041c\u0430\u0440\u0448\u0440\u0443\u0442"} {ride.route} {"\u2022"} {ride.plate}
+```
+
+## 98) client/src/pages/Home.tsx (make Manual mode collapsible and remove the duplicate chat-open button)
+- Description: Reworked the `Ручной режим` card into a persistent collapsible block, matching the rest of the Home screen behavior. The open/closed state is now saved locally, so the card stays expanded or collapsed between visits. The duplicate bottom CTA for opening the manual chat was removed, leaving a single `В чат` action in the header while keeping the route, plate, Onay prefill, clear-history, and logout controls inside the animated expandable section.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+const HOME_MANUAL_OPEN_KEY = "ios_home_manual_open";
+const [isManualPanelOpen, setIsManualPanelOpen] = useState(() => {
+  const saved = window.localStorage.getItem(HOME_MANUAL_OPEN_KEY);
+  return saved === null ? true : saved === "true";
+});
+```
+```tsx
+<AnimatePresence initial={false}>
+  {isManualPanelOpen ? (
+    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}>
+```
+
+## 99) client/src/pages/Home.tsx (fix Home card mojibake and keep manual actions visible outside the collapsible body)
+- Description: Cleaned up the remaining broken Russian strings in the Home screen, especially around the API/Onay flow and remembered-password toasts. The `Ручной режим` header keeps the collapse button above the `В чат` button in a vertical stack, and the `Очистить историю` / `Выйти из аккаунта` actions stay outside the expandable body so they remain visible even when the manual block is collapsed.
+- Date: 2026-03-27
+- Diff sample:
+```tsx
+toast.error("Введите код терминала");
+toast.success("Данные обновлены", {
+  description: `${nextRoute}, ${nextPlate} - ${nextPrice}`,
+});
+```
+```tsx
+<div className="flex shrink-0 flex-col items-end gap-2">
+  <button type="button">{isManualPanelOpen ? "Скрыть" : "Развернуть"}</button>
+  <Button onClick={goManualChat}>{"В чат"}</Button>
+</div>
+```
+```tsx
+<div className="mt-4 space-y-2 border-t border-white/8 pt-4">
+  <Button onClick={handleClearHistory}>{"Очистить историю"}</Button>
+  <Button onClick={() => setShowLogoutConfirm(true)}>{"Выйти из аккаунта"}</Button>
+</div>
+```

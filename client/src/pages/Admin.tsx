@@ -188,6 +188,12 @@ export default function Admin() {
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [newRole, setNewRole] = useState<"admin" | "user">("user");
   const [newTerm, setNewTerm] = useState<CreateUserTerm>("1m");
+  // MODIFIED BY AI: 2026-03-27 - add admin password reset dialog without exposing the current password
+  // FILE: client/src/pages/Admin.tsx
+  const [showSetPasswordDialog, setShowSetPasswordDialog] = useState(false);
+  const [passwordTargetUser, setPasswordTargetUser] = useState<AuthUser | null>(null);
+  const [adminSetPasswordValue, setAdminSetPasswordValue] = useState("");
+  const [showAdminSetPassword, setShowAdminSetPassword] = useState(false);
   // MODIFIED BY AI: 2026-02-13 - add Onay tools state (sign-in + terminal test) in admin panel
   // FILE: client/src/pages/Admin.tsx
   const [onayTerminal, setOnayTerminal] = useState("");
@@ -448,6 +454,41 @@ export default function Admin() {
           token,
           body: JSON.stringify(payload),
         });
+      },
+    });
+  };
+
+  const openSetPasswordDialog = (entry: AuthUser) => {
+    setPasswordTargetUser(entry);
+    setAdminSetPasswordValue("");
+    setShowAdminSetPassword(false);
+    setShowSetPasswordDialog(true);
+  };
+
+  const setUserPassword = async (targetUserId: number) => {
+    const nextPassword = adminSetPasswordValue.trim();
+    const entry = users.find((item) => item.id === targetUserId) || passwordTargetUser;
+
+    if (nextPassword.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    await runAction({
+      busyKey: `user:${targetUserId}:password`,
+      busyLabel: `Updating password for ${entry?.login || "user"}...`,
+      successMessage: `Password updated for ${entry?.login || "user"}`,
+      reload: "users",
+      action: async () => {
+        await apiRequest(`/admin/users/${targetUserId}/password`, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ password: nextPassword }),
+        });
+        setShowSetPasswordDialog(false);
+        setPasswordTargetUser(null);
+        setAdminSetPasswordValue("");
+        setShowAdminSetPassword(false);
       },
     });
   };
@@ -969,6 +1010,85 @@ export default function Admin() {
           ) : null}
         </AnimatePresence>
 
+        <Dialog
+          open={showSetPasswordDialog}
+          onOpenChange={(open) => {
+            setShowSetPasswordDialog(open);
+            if (!open) {
+              setPasswordTargetUser(null);
+              setAdminSetPasswordValue("");
+              setShowAdminSetPassword(false);
+            }
+          }}
+        >
+          <DialogContent className="border-white/10 bg-[#0d1017] text-white sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Set new password</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Current password cannot be viewed because the system stores only a hash.
+                Set a new password for {passwordTargetUser?.login || "this user"} and old sessions
+                on other devices will be signed out.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (passwordTargetUser) {
+                  void setUserPassword(passwordTargetUser.id);
+                }
+              }}
+              className="space-y-3"
+            >
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-gray-300">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-gray-500">User</div>
+                <div className="mt-1 font-medium text-white">{passwordTargetUser?.login || "-"}</div>
+              </div>
+
+              <div className="relative">
+                <input
+                  type={showAdminSetPassword ? "text" : "password"}
+                  value={adminSetPasswordValue}
+                  onChange={(event) => setAdminSetPasswordValue(event.target.value)}
+                  placeholder="New password (min 6 chars)"
+                  className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 pr-11 outline-none transition-colors focus:border-[#0A84FF]/70"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminSetPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-white"
+                  aria-label={showAdminSetPassword ? "Hide password" : "Show password"}
+                >
+                  {showAdminSetPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+
+              <div className="text-xs text-gray-500">
+                Admin can set a new password here, but cannot read the previous plaintext password.
+              </div>
+
+              <DialogFooter>
+                <button
+                  type="button"
+                  onClick={() => setShowSetPasswordDialog(false)}
+                  className={`rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10 ${interactiveBtnClass}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!passwordTargetUser || isPendingAction(`user:${passwordTargetUser?.id}:password`)}
+                  className={`rounded-xl bg-gradient-to-r from-[#0A84FF] to-[#2f9bff] px-3 py-2 text-sm font-semibold ${interactiveBtnClass}`}
+                >
+                  {passwordTargetUser && isPendingAction(`user:${passwordTargetUser.id}:password`)
+                    ? "Saving..."
+                    : "Save new password"}
+                </button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1394,18 +1514,36 @@ export default function Admin() {
                             </div>
                             <div className="text-xs text-gray-500">Device: {shortDevice(entry.deviceId)}</div>
                           </div>
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setSessionLoginFilter(entry.login);
-                            }}
-                            className={`rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
-                          >
-                            View logs
-                          </button>
+                          <div className="flex flex-col items-end gap-2">
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openSetPasswordDialog(entry);
+                              }}
+                              className={`rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
+                            >
+                              Password
+                            </button>
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSessionLoginFilter(entry.login);
+                              }}
+                              className={`rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
+                            >
+                              View logs
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="hidden sm:grid grid-cols-5 gap-2">
+                        <div className="hidden sm:grid grid-cols-6 gap-2">
+                          <button
+                            onClick={() => openSetPasswordDialog(entry)}
+                            disabled={isBusy}
+                            className={`rounded-lg border border-white/20 bg-white/5 px-2 py-2.5 text-xs hover:bg-white/10 ${interactiveBtnClass}`}
+                          >
+                            {isPendingAction(`user:${entry.id}:password`) ? "Saving..." : "Set Password"}
+                          </button>
                           <button
                             onClick={() => resetDevice(entry.id)}
                             disabled={isBusy}

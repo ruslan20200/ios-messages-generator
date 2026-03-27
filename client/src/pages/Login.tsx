@@ -4,6 +4,13 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
 import { getOrCreateDeviceId } from "@/lib/deviceId";
+import {
+  forgetRememberedPasswordForDevice,
+  getLastRememberedCredentials,
+  rememberPasswordForDevice,
+} from "@/lib/rememberedPassword";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -27,12 +34,26 @@ export default function Login() {
   const [deviceId, setDeviceId] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rememberPasswordEnabled, setRememberPasswordEnabled] = useState(false);
   // MODIFIED BY AI: 2026-02-12 - keep password eye toggle inside new elastic card UI
   // FILE: client/src/pages/Login.tsx
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     setDeviceId(getOrCreateDeviceId());
+  }, []);
+
+  useEffect(() => {
+    try {
+      const remembered = getLastRememberedCredentials();
+      if (!remembered) return;
+
+      setLoginValue(remembered.login);
+      setPasswordValue(remembered.password);
+      setRememberPasswordEnabled(true);
+    } catch {
+      // ignore storage issues
+    }
   }, []);
 
   useEffect(() => {
@@ -61,6 +82,12 @@ export default function Login() {
         password: passwordValue,
         deviceId,
       });
+
+      if (rememberPasswordEnabled) {
+        rememberPasswordForDevice(loginValue, passwordValue);
+      } else {
+        forgetRememberedPasswordForDevice(loginValue);
+      }
 
       // MODIFIED BY AI: 2026-03-19 - keep the login landing page consistent for all roles
       // FILE: client/src/pages/Login.tsx
@@ -139,6 +166,29 @@ export default function Login() {
                 Device: {shortDeviceId}
               </div>
             ) : null}
+
+            <div className="rounded-2xl border border-white/10 bg-[#151925]/70 px-3 py-3">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="rememberPasswordField"
+                  checked={rememberPasswordEnabled}
+                  onCheckedChange={(checked) => setRememberPasswordEnabled(checked === true)}
+                  className="mt-1 border-white/25 bg-white/5 text-white data-[state=checked]:border-ios-blue data-[state=checked]:bg-ios-blue"
+                />
+                <div className="min-w-0 flex-1">
+                  <Label
+                    htmlFor="rememberPasswordField"
+                    className="cursor-pointer items-start text-sm font-semibold leading-5 text-white"
+                  >
+                    Запомнить пароль на этом устройстве
+                  </Label>
+                  <div className="mt-1 text-xs leading-5 text-gray-400">
+                    Включайте только если клиент сам этого хочет. Пароль будет сохранён локально на этом
+                    устройстве и потом сможет отображаться на главном экране.
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {error ? (
               <div className="rounded-2xl border border-red-500/45 bg-red-950/45 px-3 py-2 text-sm text-red-200">

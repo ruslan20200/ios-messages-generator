@@ -12,11 +12,13 @@ import {
   isSameDay,
   isSameHour,
   isSameMonth,
+  isValid,
   startOfDay,
   startOfMonth,
   startOfWeek,
   startOfYear,
 } from "date-fns";
+import { enUS, ru } from "date-fns/locale";
 
 export type TravelPeriod = "day" | "week" | "month" | "year";
 
@@ -58,6 +60,9 @@ export type TravelGroupedStat = {
 
 export type TravelStats = {
   period: TravelPeriod;
+  anchorDate: Date;
+  rangeStart: Date;
+  rangeEnd: Date;
   allRides: TravelRide[];
   filteredRides: TravelRide[];
   totalSpent: number;
@@ -78,6 +83,7 @@ const STORAGE_KEY_MESSAGES_API = "ios_msg_history_api";
 const SESSION_STORAGE_KEY_MESSAGES_API = "ios_msg_history_api_session";
 const STORAGE_KEY_MESSAGES_2505 = "ios_msg_history_2505";
 const SESSION_STORAGE_KEY_MESSAGES_2505 = "ios_msg_history_2505_session";
+export const TRAVEL_STATS_MIN_DATE = new Date(2025, 0, 1);
 
 const pricePattern = /(\d[\d\s]*)\s*(?:₸|в‚ё)/;
 
@@ -160,25 +166,67 @@ export const readTravelRides = (): TravelRide[] => {
     .sort((left, right) => left.timestamp.getTime() - right.timestamp.getTime());
 };
 
-const getPeriodRange = (period: TravelPeriod, now: Date) => {
-  switch (period) {
-    case "day":
-      return { start: startOfDay(now), end: endOfDay(now) };
-    case "week":
-      return {
-        start: startOfWeek(now, { weekStartsOn: 1 }),
-        end: endOfWeek(now, { weekStartsOn: 1 }),
-      };
-    case "month":
-      return { start: startOfMonth(now), end: endOfMonth(now) };
-    case "year":
-      return { start: startOfYear(now), end: endOfYear(now) };
+const clampAnchorDate = (value: Date) => {
+  const today = new Date();
+  const minDate = startOfDay(TRAVEL_STATS_MIN_DATE);
+  const maxDate = endOfDay(today);
+
+  if (!isValid(value)) {
+    return today;
   }
+
+  if (value < minDate) {
+    return minDate;
+  }
+
+  if (value > maxDate) {
+    return today;
+  }
+
+  return value;
 };
 
-const createTimeline = (rides: TravelRide[], period: TravelPeriod, now: Date): TravelTimelinePoint[] => {
+const clampRange = (range: { start: Date; end: Date }) => {
+  const minDate = startOfDay(TRAVEL_STATS_MIN_DATE);
+  const maxDate = endOfDay(new Date());
+
+  return {
+    start: range.start < minDate ? minDate : range.start,
+    end: range.end > maxDate ? maxDate : range.end,
+  };
+};
+
+const getPeriodRange = (period: TravelPeriod, anchorDate: Date) => {
+  let range: { start: Date; end: Date };
+
+  switch (period) {
+    case "day":
+      range = { start: startOfDay(anchorDate), end: endOfDay(anchorDate) };
+      break;
+    case "week":
+      range = {
+        start: startOfWeek(anchorDate, { weekStartsOn: 1 }),
+        end: endOfWeek(anchorDate, { weekStartsOn: 1 }),
+      };
+      break;
+    case "month":
+      range = { start: startOfMonth(anchorDate), end: endOfMonth(anchorDate) };
+      break;
+    case "year":
+      range = { start: startOfYear(anchorDate), end: endOfYear(anchorDate) };
+      break;
+  }
+
+  return clampRange(range);
+};
+
+const createTimeline = (
+  rides: TravelRide[],
+  period: TravelPeriod,
+  anchorDate: Date,
+): TravelTimelinePoint[] => {
   if (period === "day") {
-    const dayStart = startOfDay(now);
+    const dayStart = startOfDay(anchorDate);
     return Array.from({ length: 24 }, (_, hourIndex) => {
       const bucketDate = new Date(dayStart);
       bucketDate.setHours(hourIndex, 0, 0, 0);
@@ -193,13 +241,13 @@ const createTimeline = (rides: TravelRide[], period: TravelPeriod, now: Date): T
   }
 
   if (period === "week") {
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+    const weekStart = startOfWeek(anchorDate, { weekStartsOn: 1 });
     return Array.from({ length: 7 }, (_, dayIndex) => {
       const bucketDate = addDays(weekStart, dayIndex);
       const bucketRides = rides.filter((ride) => isSameDay(ride.timestamp, bucketDate));
 
       return {
-        label: format(bucketDate, "EE"),
+        label: format(bucketDate, "EEE", { locale: enUS }).toUpperCase(),
         total: bucketRides.reduce((sum, ride) => sum + ride.amount, 0),
         rides: bucketRides.length,
       };
@@ -207,8 +255,8 @@ const createTimeline = (rides: TravelRide[], period: TravelPeriod, now: Date): T
   }
 
   if (period === "month") {
-    const monthStart = startOfMonth(now);
-    const monthEnd = endOfMonth(now);
+    const monthStart = startOfMonth(anchorDate);
+    const monthEnd = endOfMonth(anchorDate);
     const daysInMonth = monthEnd.getDate();
 
     return Array.from({ length: daysInMonth }, (_, index) => {
@@ -224,11 +272,11 @@ const createTimeline = (rides: TravelRide[], period: TravelPeriod, now: Date): T
   }
 
   return Array.from({ length: 12 }, (_, monthIndex) => {
-    const bucketDate = new Date(now.getFullYear(), monthIndex, 1);
+    const bucketDate = new Date(anchorDate.getFullYear(), monthIndex, 1);
     const bucketRides = rides.filter((ride) => isSameMonth(ride.timestamp, bucketDate));
 
     return {
-      label: format(bucketDate, "LLL"),
+      label: format(bucketDate, "LLL", { locale: ru }),
       total: bucketRides.reduce((sum, ride) => sum + ride.amount, 0),
       rides: bucketRides.length,
     };
@@ -260,10 +308,13 @@ const createGroupedStats = (
     .sort((left, right) => right.total - left.total);
 };
 
-export const buildTravelStats = (period: TravelPeriod): TravelStats => {
-  const now = new Date();
+export const buildTravelStats = (
+  period: TravelPeriod,
+  options?: { anchorDate?: Date },
+): TravelStats => {
+  const anchorDate = clampAnchorDate(options?.anchorDate ?? new Date());
   const allRides = readTravelRides();
-  const { start, end } = getPeriodRange(period, now);
+  const { start, end } = getPeriodRange(period, anchorDate);
   const filteredRides = allRides.filter((ride) => ride.timestamp >= start && ride.timestamp <= end);
 
   const totalSpent = filteredRides.reduce((sum, ride) => sum + ride.amount, 0);
@@ -274,6 +325,9 @@ export const buildTravelStats = (period: TravelPeriod): TravelStats => {
 
   return {
     period,
+    anchorDate,
+    rangeStart: start,
+    rangeEnd: end,
     allRides,
     filteredRides,
     totalSpent,
@@ -281,7 +335,7 @@ export const buildTravelStats = (period: TravelPeriod): TravelStats => {
     rideCount,
     averageFare: rideCount > 0 ? Math.round(totalSpent / rideCount) : 0,
     routesCount: routeStats.length,
-    timeline: createTimeline(filteredRides, period, now),
+    timeline: createTimeline(filteredRides, period, anchorDate),
     routeStats,
     plateStats,
     topRoute: routeStats[0] || null,

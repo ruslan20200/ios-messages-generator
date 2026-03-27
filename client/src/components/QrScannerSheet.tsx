@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import jsQR from "jsqr";
 import { Camera, RefreshCw, ScanLine, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +30,15 @@ type BarcodeDetectorConstructor = new (options?: {
 }) => BarcodeDetectorInstance;
 
 const SCAN_TIMEOUT_MS = 15000;
+let jsQrModulePromise: Promise<typeof import("jsqr")> | null = null;
+
+const loadJsQr = async () => {
+  if (!jsQrModulePromise) {
+    jsQrModulePromise = import("jsqr");
+  }
+
+  return jsQrModulePromise;
+};
 
 const getBarcodeDetectorConstructor = (): BarcodeDetectorConstructor | null => {
   const maybeConstructor = (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector;
@@ -109,7 +117,7 @@ export function QrScannerSheet({ open, onOpenChange, onDetected }: QrScannerShee
     [onDetected, onOpenChange, stopScanner],
   );
 
-  const decodeWithJsQr = useCallback((): string | null => {
+  const decodeWithJsQr = useCallback(async (): Promise<string | null> => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || video.videoWidth <= 0 || video.videoHeight <= 0) {
@@ -124,6 +132,7 @@ export function QrScannerSheet({ open, onOpenChange, onDetected }: QrScannerShee
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const { default: jsQR } = await loadJsQr();
     const result = jsQR(imageData.data, imageData.width, imageData.height, {
       inversionAttempts: "attemptBoth",
     });
@@ -151,7 +160,7 @@ export function QrScannerSheet({ open, onOpenChange, onDetected }: QrScannerShee
       }
 
       if (!rawValue) {
-        rawValue = decodeWithJsQr();
+        rawValue = await decodeWithJsQr();
       }
 
       if (rawValue) {
@@ -245,6 +254,12 @@ export function QrScannerSheet({ open, onOpenChange, onDetected }: QrScannerShee
       stopScanner();
     }
   }, [detectorSupported, scanLoop, stopScanner]);
+
+  useEffect(() => {
+    if (open) {
+      void loadJsQr().catch(() => {});
+    }
+  }, [open]);
 
   useEffect(() => {
     startScannerRef.current = startScanner;

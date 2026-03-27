@@ -866,6 +866,40 @@ async function startServer() {
           },
         },
       },
+      "/admin/users/{id}/password": {
+        post: {
+          tags: ["Admin"],
+          summary: "Set a new password for a user",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "integer" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    password: { type: "string", example: "NewPass123$" },
+                  },
+                  required: ["password"],
+                },
+              },
+            },
+          },
+          responses: {
+            200: { description: "Password updated" },
+            400: { description: "Validation error" },
+            404: { description: "User not found" },
+          },
+        },
+      },
       "/admin/sessions": {
         get: {
           tags: ["Admin"],
@@ -1223,6 +1257,65 @@ async function startServer() {
       });
     } catch (error) {
       return res.status(500).json({ success: false, error: "Failed to load users" });
+    }
+  });
+
+  // MODIFIED BY AI: 2026-03-27 - add admin-only password reset route without exposing current password
+  // FILE: server/index.ts
+  app.post("/admin/users/:id/password", requireAuth, requireAdmin, async (req, res) => {
+    const userId = parseUserId(req.params.id);
+    const password = normalizePassword(req.body?.password);
+
+    if (!userId) {
+      return res.status(400).json({ success: false, error: "Invalid user id" });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: "Password must be at least 6 characters",
+      });
+    }
+
+    try {
+      const passwordHash = await hashPassword(password);
+      const updated = await query<Omit<UserRow, "password_hash">>(
+        `UPDATE users
+         SET password_hash = $2
+         WHERE id = $1
+         RETURNING id, login, role, device_id, expires_at, created_at`,
+        [userId, passwordHash],
+      );
+
+      if (updated.rowCount === 0) {
+        return res.status(404).json({ success: false, error: "User not found" });
+      }
+
+      const auth = (req as AuthenticatedRequest).auth;
+      await query(
+        `UPDATE sessions
+         SET is_active = FALSE,
+             last_seen = NOW()
+         WHERE user_id = $1
+           AND ($2::int IS NULL OR id <> $2)`,
+        [userId, auth?.userId === userId ? auth.sessionId : null],
+      );
+
+      if (auth) {
+        await logAdminAction({
+          adminUserId: auth.userId,
+          action: "set_user_password",
+          targetUserId: userId,
+          notes: "manual_admin_reset=true",
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: { user: toPublicUser(updated.rows[0]) },
+      });
+    } catch (error) {
+      return res.status(500).json({ success: false, error: "Failed to update password" });
     }
   });
 
@@ -1713,10 +1806,34 @@ async function startServer() {
       ? path.resolve(__dirname, "public")
       : path.resolve(__dirname, "..", "dist", "public");
 
-  app.use(express.static(staticPath));
+  // MODIFIED BY AI: 2026-03-27 - add cache headers for static files so repeat visits open faster without changing visuals
+  // FILE: server/index.ts
+  app.use(
+    express.static(staticPath, {
+      etag: true,
+      lastModified: true,
+      setHeaders: (res, filePath) => {
+        const normalized = filePath.replace(/\\/g, "/");
+        const fileName = path.basename(filePath);
+
+        if (fileName === "service-worker.js" || normalized.endsWith("/index.html")) {
+          res.setHeader("Cache-Control", "no-cache");
+          return;
+        }
+
+        if (normalized.includes("/assets/")) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          return;
+        }
+
+        res.setHeader("Cache-Control", "public, max-age=3600");
+      },
+    }),
+  );
 
   // Handle client-side routing - serve index.html for all routes
   app.get("*", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
     res.sendFile(path.join(staticPath, "index.html"));
   });
 

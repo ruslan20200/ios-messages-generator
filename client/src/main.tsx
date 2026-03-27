@@ -21,4 +21,30 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 
-registerSW({ immediate: true });
+// MODIFIED BY AI: 2026-03-27 - register the service worker after load/idle so first paint is not blocked by startup work
+// FILE: client/src/main.tsx
+const scheduleServiceWorkerRegistration = () => {
+  const startRegistration = () => registerSW({ immediate: true });
+
+  const runDeferred = () => {
+    const win = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+    };
+
+    if (typeof win.requestIdleCallback === "function") {
+      win.requestIdleCallback(() => startRegistration(), { timeout: 2400 });
+      return;
+    }
+
+    window.setTimeout(startRegistration, 900);
+  };
+
+  if (document.readyState === "complete") {
+    runDeferred();
+    return;
+  }
+
+  window.addEventListener("load", runDeferred, { once: true });
+};
+
+scheduleServiceWorkerRegistration();
