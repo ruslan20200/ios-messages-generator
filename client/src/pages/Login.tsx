@@ -110,7 +110,7 @@ export default function Login() {
         <div className="absolute -right-20 bottom-[-18%] h-96 w-96 rounded-full bg-blue-600/22 blur-3xl" />
       </div>
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center px-4 py-8">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center px-4 py-6">
         <motion.div
           className="w-full space-y-5"
           initial={{ opacity: 0, y: 18, scale: 0.985 }}
@@ -167,24 +167,23 @@ export default function Login() {
               </div>
             ) : null}
 
-            <div className="rounded-2xl border border-white/10 bg-[#151925]/70 px-3 py-3">
-              <div className="flex items-start gap-3">
+            <div className="rounded-2xl border border-white/10 bg-[#151925]/70 px-3 py-2.5">
+              <div className="flex items-center gap-3">
                 <Checkbox
                   id="rememberPasswordField"
                   checked={rememberPasswordEnabled}
                   onCheckedChange={(checked) => setRememberPasswordEnabled(checked === true)}
-                  className="mt-1 border-white/25 bg-white/5 text-white data-[state=checked]:border-ios-blue data-[state=checked]:bg-ios-blue"
+                  className="shrink-0 border-white/25 bg-white/5 text-white data-[state=checked]:border-ios-blue data-[state=checked]:bg-ios-blue"
                 />
                 <div className="min-w-0 flex-1">
                   <Label
                     htmlFor="rememberPasswordField"
-                    className="cursor-pointer items-start text-sm font-semibold leading-5 text-white"
+                    className="cursor-pointer text-sm font-medium leading-5 text-gray-200"
                   >
-                    Запомнить пароль на этом устройстве
+                    Запомнить пароль на устройстве
                   </Label>
-                  <div className="mt-1 text-xs leading-5 text-gray-400">
-                    Включайте только если клиент сам этого хочет. Пароль будет сохранён локально на этом
-                    устройстве и потом сможет отображаться на главном экране.
+                  <div className="text-[11px] leading-4 text-gray-500">
+                    Только по желанию клиента
                   </div>
                 </div>
               </div>
@@ -199,9 +198,9 @@ export default function Login() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-2xl bg-ios-blue py-3 text-base font-semibold transition-all duration-200 active:scale-[0.99] disabled:opacity-70"
+              className="w-full rounded-2xl bg-ios-blue py-3 text-base font-semibold transition-all duration-200 active:scale-[0.99] disabled:opacity-70 sticky bottom-0"
             >
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              {isSubmitting ? "Вход..." : "Войти"}
             </button>
           </form>
         </motion.div>

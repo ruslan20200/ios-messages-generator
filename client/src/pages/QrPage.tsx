@@ -48,6 +48,13 @@ export default function QrPage({ params }: QrPageProps) {
           >
             ?
           </button>
+          {/* Invisible back button covering the entire header row */}
+          <button
+            type="button"
+            aria-label="Назад"
+            onClick={handleBack}
+            className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-pointer"
+          />
         </div>
 
         <div className="p-2 space-y-2 flex-1">

@@ -1,4 +1,4 @@
-﻿// MODIFIED BY AI: 2026-03-26 - count 2505 rides by real route and plate while keeping api/manual stats intact
+// MODIFIED BY AI: 2026-03-26 - count 2505 rides by real route and plate while keeping api/manual stats intact
 // FILE: client/src/lib/travelStats.ts
 
 import { normalizeChat2505Plate } from "@/lib/chat2505";
@@ -87,18 +87,34 @@ export const TRAVEL_STATS_MIN_DATE = new Date(2025, 0, 1);
 
 const pricePattern = /(\d[\d\s]*)\s*(?:₸|в‚ё)/;
 
-const readStoredMessages = (sessionKey: string, localKey: string): StoredMessage[] => {
-  if (typeof window === "undefined") return [];
-
-  const saved = sessionStorage.getItem(sessionKey) || localStorage.getItem(localKey);
-  if (!saved) return [];
-
+const tryParseStoredMessages = (raw: string | null): StoredMessage[] => {
+  if (!raw) return [];
   try {
-    const parsed = JSON.parse(saved);
+    const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
+};
+
+const readStoredMessages = (sessionKey: string, localKey: string): StoredMessage[] => {
+  if (typeof window === "undefined") return [];
+
+  const sessionMessages = tryParseStoredMessages(sessionStorage.getItem(sessionKey));
+  const localMessages = tryParseStoredMessages(localStorage.getItem(localKey));
+
+  // Merge both sources and deduplicate by id (session takes precedence for same id)
+  const seenIds = new Set<string>();
+  const merged: StoredMessage[] = [];
+
+  // local first (older), then session (newer/overrides)
+  for (const msg of [...localMessages, ...sessionMessages]) {
+    if (msg.id && seenIds.has(msg.id)) continue;
+    if (msg.id) seenIds.add(msg.id);
+    merged.push(msg);
+  }
+
+  return merged;
 };
 
 const parseAmount = (price: string | undefined) => {

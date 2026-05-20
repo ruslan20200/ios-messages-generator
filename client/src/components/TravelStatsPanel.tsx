@@ -1,4 +1,4 @@
-﻿// MODIFIED BY AI: 2026-03-27 - add calendar day picker and detailed day zoom for travel spend chart
+// MODIFIED BY AI: 2026-03-27 - add calendar day picker and detailed day zoom for travel spend chart
 // FILE: client/src/components/TravelStatsPanel.tsx
 
 import { Calendar } from "@/components/ui/calendar";
@@ -128,16 +128,16 @@ function MetricCard({
 }) {
   return (
     <motion.div
-      className="rounded-[24px] border border-white/10 bg-[#10141d]/82 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.28)]"
+      className="rounded-[24px] border border-white/10 bg-[#10141d]/82 overflow-hidden shadow-[0_18px_40px_rgba(0,0,0,0.28)]"
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className="text-[11px] uppercase tracking-[0.26em] text-white/45">{label}</div>
-      <div className="mt-2 text-[26px] font-bold text-white">{value}</div>
-      <div className="mt-1 text-sm text-white/58">{hint}</div>
-      <div className="mt-4 h-1.5 rounded-full bg-white/8">
-        <div className="h-full rounded-full" style={{ width: "100%", background: accent }} />
+      <div className="h-1" style={{ background: accent }} />
+      <div className="p-4">
+        <div className="text-[10px] uppercase tracking-[0.28em] text-white/40">{label}</div>
+        <div className="mt-2 text-[22px] font-bold leading-none text-white">{value}</div>
+        <div className="mt-1.5 text-[12px] leading-4 text-white/50">{hint}</div>
       </div>
     </motion.div>
   );
@@ -146,23 +146,28 @@ function MetricCard({
 function RouteBar({ item, index }: { item: TravelGroupedStat; index: number }) {
   return (
     <motion.div
-      className="space-y-1.5"
+      className="space-y-2"
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.22, delay: index * 0.04 }}
     >
-      <div className="flex items-start justify-between gap-3 text-sm">
-        <div className="min-w-0">
-          <div className="truncate font-semibold text-white">{item.key}</div>
-          <div className="text-xs text-white/45">{item.rides} {"\u043f\u043e\u0435\u0437\u0434\u043e\u043a"}</div>
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/8 text-[11px] font-bold text-white/70">
+            {index + 1}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate font-semibold text-white">{item.key}</div>
+            <div className="text-[11px] text-white/40">{item.rides} {"поездок"}</div>
+          </div>
         </div>
         <div className="shrink-0 text-right">
           <div className="whitespace-nowrap font-semibold text-white">{formatKzt(item.total)}</div>
-          <div className="text-xs text-cyan-200/70">{Math.round(item.share * 100)}%</div>
+          <div className="text-[11px] text-cyan-300/60">{Math.round(item.share * 100)}%</div>
         </div>
       </div>
 
-      <div className="h-1.5 rounded-full bg-white/8">
+      <div className="h-1 rounded-full bg-white/8">
         <motion.div
           className="h-full rounded-full bg-[linear-gradient(90deg,#6ef0b6_0%,#26c7ff_58%,#ffb156_100%)]"
           initial={{ width: 0 }}
@@ -184,10 +189,10 @@ function ChartMetric({
   hint: string;
 }) {
   return (
-    <div className="rounded-[18px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] px-3 py-2.5">
+    <div className="rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-3 py-2.5">
       <div className="text-[10px] uppercase tracking-[0.18em] text-white/38">{label}</div>
-      <div className="mt-1 text-base font-semibold text-white">{value}</div>
-      <div className="mt-1 text-[11px] leading-4 text-white/42">{hint}</div>
+      <div className="mt-1 text-[15px] font-bold text-white leading-none">{value}</div>
+      <div className="mt-1 text-[10px] leading-4 text-white/40">{hint}</div>
     </div>
   );
 }
@@ -281,18 +286,26 @@ export function TravelStatsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
   if (stats.allRides.length === 0) {
     return (
       <motion.section
-        className="rounded-3xl border border-white/12 bg-[#0f1016]/82 p-4 backdrop-blur-xl shadow-[0_12px_40px_rgba(2,10,22,0.45)]"
+        className="rounded-3xl border border-white/12 bg-[#0f1016]/82 p-6 backdrop-blur-xl shadow-[0_12px_40px_rgba(2,10,22,0.45)]"
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="text-base font-semibold text-white">
-          {"\u041b\u0438\u0447\u043d\u0430\u044f \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0430 \u043f\u043e\u0435\u0437\u0434\u043e\u043a"}
-        </div>
-        <div className="mt-2 text-sm text-white/55">
-          {
-            "\u041a\u043e\u0433\u0434\u0430 \u0432 \u0438\u0441\u0442\u043e\u0440\u0438\u0438 \u043f\u043e\u044f\u0432\u044f\u0442\u0441\u044f \u0443\u0441\u043f\u0435\u0448\u043d\u044b\u0435 \u043f\u043e\u0435\u0437\u0434\u043a\u0438, \u0437\u0434\u0435\u0441\u044c \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438 \u043f\u043e\u043a\u0430\u0436\u0443\u0442\u0441\u044f \u0442\u0440\u0430\u0442\u044b, \u043b\u044e\u0431\u0438\u043c\u044b\u0435 \u043c\u0430\u0440\u0448\u0440\u0443\u0442\u044b \u0438 \u0434\u0438\u043d\u0430\u043c\u0438\u043a\u0430 \u043f\u043e \u043f\u0435\u0440\u0438\u043e\u0434\u0430\u043c."
-          }
+        <div className="flex flex-col items-center gap-3 py-2 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5">
+            <svg viewBox="0 0 24 24" className="h-7 w-7 text-cyan-300/60" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3v5h5M21 3v5h-5M3 21v-5h5M21 21v-5h-5" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </div>
+          <div>
+            <div className="text-base font-semibold text-white">
+              {"Личная статистика поездок"}
+            </div>
+            <div className="mt-1.5 max-w-[240px] text-sm leading-5 text-white/50">
+              {"Когда в истории появятся успешные поездки, здесь автоматически покажутся траты, любимые маршруты и динамика по периодам."}
+            </div>
+          </div>
         </div>
       </motion.section>
     );
@@ -542,29 +555,42 @@ export function TravelStatsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
 
         {period === "day" && isDayZoomed && stats.filteredRides.length > 0 ? (
           <div className="mt-3 rounded-[20px] border border-white/8 bg-[#0c1119]/88 p-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 mb-3">
               <div className="text-[11px] uppercase tracking-[0.22em] text-white/42">
-                {"\u0422\u043e\u0447\u043d\u044b\u0435 \u043e\u043f\u043b\u0430\u0442\u044b"}
+                {"Точные оплаты"}
               </div>
-              <div className="text-xs text-white/42">{selectedDateLabel}</div>
+              <div className="flex items-center gap-1.5 rounded-full border border-cyan-300/15 bg-cyan-300/6 px-2.5 py-1 text-[11px] text-cyan-100/70">
+                {selectedDateLabel}
+              </div>
             </div>
 
-            <div className="mt-3 max-h-[180px] space-y-2 overflow-y-auto pr-1">
-              {stats.filteredRides.map((ride) => (
-                <div
+            <div className="max-h-[200px] space-y-1.5 overflow-y-auto pr-1">
+              {stats.filteredRides.map((ride, index) => (
+                <motion.div
                   key={ride.id}
-                  className="flex items-center justify-between gap-3 rounded-[16px] border border-white/6 bg-white/4 px-3 py-2"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.18, delay: index * 0.03 }}
+                  className="flex items-center justify-between gap-3 rounded-[14px] border border-white/6 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-3 py-2.5"
                 >
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">{formatRideMoment(ride)}</div>
-                    <div className="truncate text-xs text-white/48">
-                      {"\u041c\u0430\u0440\u0448\u0440\u0443\u0442"} {ride.route} {"\u2022"} {ride.plate}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/8 text-[10px] font-bold text-white/60">
+                      {index + 1}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white">{formatRideMoment(ride)}</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="rounded-full bg-cyan-400/10 border border-cyan-400/20 px-1.5 py-0.5 text-[10px] font-medium text-cyan-200/80">
+                          {"Маршрут "}{ride.route}
+                        </span>
+                        <span className="truncate text-[11px] text-white/40">{ride.plate}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="shrink-0 text-sm font-semibold text-cyan-100">
+                  <div className="shrink-0 text-sm font-bold text-cyan-100">
                     {formatKzt(ride.amount)}
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -607,16 +633,21 @@ export function TravelStatsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
           ) : null}
 
           {visibleRoutes.length > 0 ? (
-            <div className={cn("space-y-3", showAllRoutes && "max-h-[280px] overflow-y-auto pr-1")}>
+            <div className={cn("space-y-4", showAllRoutes && "max-h-[280px] overflow-y-auto pr-1")}>
               {visibleRoutes.map((item, index) => (
                 <RouteBar key={item.key} item={item} index={index} />
               ))}
             </div>
           ) : (
-            <div className="rounded-[20px] border border-white/8 bg-white/4 px-4 py-4 text-sm text-white/55">
-              {
-                "\u041f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0443\u0441\u043f\u0435\u0448\u043d\u044b\u0445 \u043f\u043e\u0435\u0437\u0434\u043e\u043a \u0437\u0430 \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u043f\u0435\u0440\u0438\u043e\u0434."
-              }
+            <div className="flex flex-col items-center gap-2 rounded-[20px] border border-white/8 bg-white/3 px-4 py-5 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 text-white/30" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a10 10 0 110 20A10 10 0 0112 2zm0 6v4m0 4h.01" />
+                </svg>
+              </div>
+              <div className="text-sm text-white/45">
+                {"Пока нет успешных поездок за выбранный период."}
+              </div>
             </div>
           )}
         </div>
