@@ -1,4 +1,4 @@
-﻿// MODIFIED BY AI: 2026-03-26 - group 2505 transports by route while keeping local ticket generation unchanged
+// MODIFIED BY AI: 2026-03-26 - group 2505 transports by route while keeping local ticket generation unchanged
 // FILE: client/src/lib/chat2505.ts
 
 import type { Message as SharedChatMessage } from "@/contexts/ChatContext";
@@ -27,7 +27,7 @@ export type Chat2505Message = SharedChatMessage;
 export const CHAT2505_SETTINGS_STORAGE_KEY = "ios_msg_2505_settings";
 export const CHAT2505_MESSAGES_STORAGE_KEY = "ios_msg_history_2505";
 export const CHAT2505_MESSAGES_SESSION_STORAGE_KEY = "ios_msg_history_2505_session";
-export const MAX_PERSISTED_2505_MESSAGES = 140;
+export const MAX_PERSISTED_2505_MESSAGES = 2000;
 
 const TRANSPORT_2505_INPUT_PATTERN =
   /^(\d{5})\(([0-9]{3}[A-Z\u0410-\u042f\u0401]{2}[0-9]{2})\)$/;

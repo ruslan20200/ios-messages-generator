@@ -107,8 +107,8 @@ const readStoredMessages = (sessionKey: string, localKey: string): StoredMessage
   const seenIds = new Set<string>();
   const merged: StoredMessage[] = [];
 
-  // local first (older), then session (newer/overrides)
-  for (const msg of [...localMessages, ...sessionMessages]) {
+  // session first (takes precedence/newer), then local (older)
+  for (const msg of [...sessionMessages, ...localMessages]) {
     if (msg.id && seenIds.has(msg.id)) continue;
     if (msg.id) seenIds.add(msg.id);
     merged.push(msg);
@@ -204,11 +204,10 @@ const clampAnchorDate = (value: Date) => {
 
 const clampRange = (range: { start: Date; end: Date }) => {
   const minDate = startOfDay(TRAVEL_STATS_MIN_DATE);
-  const maxDate = endOfDay(new Date());
 
   return {
     start: range.start < minDate ? minDate : range.start,
-    end: range.end > maxDate ? maxDate : range.end,
+    end: range.end,
   };
 };
 

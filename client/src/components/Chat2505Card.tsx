@@ -1,4 +1,4 @@
-﻿// MODIFIED BY AI: 2026-03-26 - switch 2505 settings from a flat transport list to route groups with nested transports
+// MODIFIED BY AI: 2026-03-26 - switch 2505 settings from a flat transport list to route groups with nested transports
 // FILE: client/src/components/Chat2505Card.tsx
 
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,14 @@ const glassCardClass =
   "rounded-3xl border border-white/12 bg-[#0f1016]/82 backdrop-blur-xl shadow-[0_12px_40px_rgba(2,10,22,0.45)]";
 
 const cardTransition = { duration: 0.3, ease: [0.22, 1, 0.36, 1] as const };
+
+const generateUUID = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const chunk = () => Math.floor(Math.random() * 0xffff).toString(16).padStart(4, "0");
+  return `${chunk()}${chunk()}-${chunk()}-${chunk()}-${chunk()}-${chunk()}${chunk()}${chunk()}`;
+};
 
 type Chat2505CardProps = {
   resetKey: number;
@@ -112,7 +120,7 @@ export function Chat2505Card({ resetKey, onOpen }: Chat2505CardProps) {
     }
 
     const nextRoute: Chat2505Route = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name: normalizedRoute,
       transports: [],
     };
@@ -154,7 +162,7 @@ export function Chat2505Card({ resetKey, onOpen }: Chat2505CardProps) {
     }
 
     const nextTransport: Chat2505Transport = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       code: parsed.code,
       plate: parsed.plate,
     };

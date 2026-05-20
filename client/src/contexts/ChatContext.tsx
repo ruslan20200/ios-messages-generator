@@ -48,7 +48,7 @@ const STORAGE_KEY_MESSAGES = "ios_msg_history";
 const SESSION_STORAGE_KEY_MESSAGES = "ios_msg_history_session";
 // API чат хранится отдельно, чистим вместе с ручным
 const STORAGE_KEY_MESSAGES_API = "ios_msg_history_api";
-const MAX_PERSISTED_MESSAGES = 140;
+const MAX_PERSISTED_MESSAGES = 2000;
 const STORAGE_WRITE_DEBOUNCE_MS = 180;
 
 const runWhenIdle = (task: () => void): (() => void) => {

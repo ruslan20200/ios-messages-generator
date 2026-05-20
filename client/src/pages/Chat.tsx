@@ -26,7 +26,7 @@ const API_BASE = String(import.meta.env.VITE_API_BASE || "")
 const apiUrl = (path: string) => `${API_BASE}${path}`;
 const KEYBOARD_OPEN_THRESHOLD = 72;
 const TERMINAL_DIGITS_PATTERN = /^\d+$/;
-const MAX_PERSISTED_API_MESSAGES = 140;
+const MAX_PERSISTED_API_MESSAGES = 2000;
 const STORAGE_WRITE_DEBOUNCE_MS = 180;
 const DEFAULT_KEYBOARD_MAX_OFFSET = 360;
 const IOS_KEYBOARD_TOOLBAR_OFFSET = 46;
@@ -35,6 +35,14 @@ const ACTION_MENU_WIDTH = 230;
 const ACTION_MENU_HEIGHT = 132;
 const CHAT2505_RESPONSE_DELAY_MIN_MS = 1100;
 const CHAT2505_RESPONSE_DELAY_MAX_MS = 2200;
+
+const generateUUID = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const chunk = () => Math.floor(Math.random() * 0xffff).toString(16).padStart(4, "0");
+  return `${chunk()}${chunk()}-${chunk()}-${chunk()}-${chunk()}-${chunk()}${chunk()}${chunk()}`;
+};
 
 const runWhenIdle = (task: () => void): (() => void) => {
   const win = window as Window & {
@@ -506,7 +514,7 @@ export default function Chat() {
 
       if (!/^\d{5}$/.test(text)) {
         const errMsg: ChatMessage = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           text: "\u041e\u0448\u0438\u0431\u043a\u0430. \u0412\u0432\u0435\u0434\u0438\u0442\u0435 5 \u0446\u0438\u0444\u0440 \u043a\u043e\u0434\u0430 \u0442\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442\u0430.",
           isMe: false,
           timestamp: new Date(),
@@ -538,7 +546,7 @@ export default function Chat() {
     // FILE: client/src/pages/Chat.tsx
     if (!TERMINAL_DIGITS_PATTERN.test(text)) {
       const errMsg: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         text: "\u041e\u0448\u0438\u0431\u043a\u0430. \u0414\u043b\u044f \u0437\u0430\u043f\u0440\u043e\u0441\u0430 \u0432\u0432\u043e\u0434\u0438\u0442\u0435 \u0442\u043e\u043b\u044c\u043a\u043e \u0446\u0438\u0444\u0440\u044b.",
         isMe: false,
         timestamp: new Date(),
@@ -553,7 +561,7 @@ export default function Chat() {
     setInputCode("");
 
     const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       text,
       isMe: true,
       timestamp: new Date(),
@@ -583,7 +591,7 @@ export default function Chat() {
 
       if (isEmptyPayload) {
         const errMsg: ChatMessage = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           text: "\u041e\u0448\u0438\u0431\u043a\u0430. \u0423\u0441\u043b\u0443\u0433\u0430 \u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430, \u043f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u043f\u043e\u0437\u0436\u0435.",
           isMe: false,
           timestamp: new Date(),
@@ -609,7 +617,7 @@ export default function Chat() {
       const responseText = `ONAY! ALA\nAT ${formattedDate}\n${route},${plate},${price}\nhttp://qr.tha.kz/${suffix}`;
 
       const systemMsg: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         text: responseText,
         isMe: false,
         timestamp: new Date(),
@@ -628,7 +636,7 @@ export default function Chat() {
           ? error.message
           : "\u041a\u043e\u0434 \u043d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u0438\u043b\u0438 \u0441\u0435\u0440\u0432\u0438\u0441 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d";
       const errMsg: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         text: `\u041e\u0448\u0438\u0431\u043a\u0430. ${message}`,
         isMe: false,
         timestamp: new Date(),
