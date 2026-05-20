@@ -120,6 +120,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
     lastSerializedMessagesRef.current = serialized;
     sessionStorage.setItem(SESSION_STORAGE_KEY_MESSAGES, serialized);
+    // Notify TravelStatsPanel on the same tab immediately
+    window.dispatchEvent(new Event("travel-stats-updated"));
 
     let cancelIdle = () => {};
     const timer = window.setTimeout(() => {

@@ -210,11 +210,13 @@ export function TravelStatsPanel({ refreshKey = 0 }: { refreshKey?: number }) {
 
     window.addEventListener("focus", refresh);
     window.addEventListener("storage", refresh);
+    window.addEventListener("travel-stats-updated", refresh);
     document.addEventListener("visibilitychange", refresh);
 
     return () => {
       window.removeEventListener("focus", refresh);
       window.removeEventListener("storage", refresh);
+      window.removeEventListener("travel-stats-updated", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
   }, []);
