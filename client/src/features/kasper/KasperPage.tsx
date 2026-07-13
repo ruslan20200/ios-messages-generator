@@ -266,6 +266,15 @@ export default function KasperPage() {
             key={activeTab}
             className={styles.panel}
             role="tabpanel"
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.18}
+            onDragEnd={(_, info) => {
+              const left = info.offset.x < -60 || info.velocity.x < -450;
+              const right = info.offset.x > 60 || info.velocity.x > 450;
+              if (left && activeTab === "9909") handleTabChange("2505");
+              else if (right && activeTab === "2505") handleTabChange("9909");
+            }}
             initial={{ opacity: 0, x: activeTab === "2505" ? 14 : -14 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: activeTab === "2505" ? -14 : 14 }}
