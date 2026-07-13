@@ -5,7 +5,7 @@ import {
   generateChat2505Transaction,
   readChat2505Settings,
 } from "@/lib/chat2505";
-import type { TicketData, TicketSource } from "./types";
+import type { ConversationMessage, TicketData, TicketSource } from "./types";
 
 // v2: old records stored a JSON qrPayload and are incompatible with the new card.
 const HISTORY_STORAGE_KEY = "kasper-2505-ticket-history-v2";
@@ -240,6 +240,57 @@ export function readActiveTab(): TicketSource {
 export function saveActiveTab(tab: TicketSource) {
   try {
     localStorage.setItem(ACTIVE_TAB_KEY, tab);
+  } catch {
+    // ignore storage errors
+  }
+}
+
+// --- 9909 ticket list persistence (2505 already persists via history) ---
+const HISTORY_9909_KEY = "kasper-9909-ticket-history";
+
+export function read9909Messages(): ConversationMessage[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_9909_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (m: ConversationMessage) => m?.ticket && isValidTicket(m.ticket),
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function save9909Messages(messages: ConversationMessage[]) {
+  try {
+    localStorage.setItem(HISTORY_9909_KEY, JSON.stringify(messages));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+// --- Feed each Kasper ticket into the shared Travel Stats ---
+const TRAVEL_STATS_KEY = "ios_msg_history_kasper";
+
+export function recordKasperRide(ticket: TicketData) {
+  try {
+    const raw = localStorage.getItem(TRAVEL_STATS_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    const rides = Array.isArray(list) ? list : [];
+    rides.push({
+      id: ticket.id,
+      isMe: false,
+      timestamp: ticket.createdAt,
+      details: {
+        kind: "api",
+        route: ticket.transportCode ?? "—",
+        number: ticket.plate ?? "—",
+        price: ticket.amount ?? "120 ₸",
+      },
+    });
+    localStorage.setItem(TRAVEL_STATS_KEY, JSON.stringify(rides));
+    window.dispatchEvent(new Event("travel-stats-updated"));
   } catch {
     // ignore storage errors
   }

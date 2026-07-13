@@ -3,6 +3,7 @@ import { ArrowUp, Camera, ChevronDown, ChevronLeft, ChevronRight, Trash2 } from 
 import { nanoid } from "nanoid";
 import {
   type FormEvent,
+  type TouchEvent as ReactTouchEvent,
   memo,
   useCallback,
   useEffect,
@@ -14,10 +15,13 @@ import { QrScannerSheet } from "@/components/QrScannerSheet";
 import { detectKasperQr, type QrParseResult } from "./qr";
 import {
   createLocalTicket,
+  read9909Messages,
   readActiveTab,
   readOpenTicket,
   readTicketHistory,
+  recordKasperRide,
   requestApiTicket,
+  save9909Messages,
   saveActiveTab,
   saveOpenTicket,
   saveTicketHistory,
@@ -94,10 +98,10 @@ export default function KasperPage() {
   const [error, setError] = useState<string | null>(null);
   const [shakeKey, setShakeKey] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState<Record<Tab, ConversationMessage[]>>({
-    "9909": [],
+  const [messages, setMessages] = useState<Record<Tab, ConversationMessage[]>>(() => ({
+    "9909": read9909Messages(),
     "2505": [],
-  });
+  }));
   const [tickets, setTickets] = useState<TicketData[]>(readTicketHistory);
   // Restore the ticket that was open when the PWA was last closed.
   const [selectedTicket, setSelectedTicket] = useState<TicketData | null>(readOpenTicket);
@@ -116,6 +120,10 @@ export default function KasperPage() {
   useEffect(() => {
     saveActiveTab(activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    save9909Messages(messages["9909"]);
+  }, [messages]);
 
   useEffect(() => {
     // Only the 9909 feed appends at the bottom; 2505 prepends, so no auto-scroll there.
@@ -169,6 +177,7 @@ export default function KasperPage() {
         addMessage("9909", { id: nanoid(), direction: "incoming", ticket });
       }
 
+      recordKasperRide(ticket);
       openTicket(ticket);
     } catch (requestError) {
       const message =
@@ -212,6 +221,31 @@ export default function KasperPage() {
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab);
     setError(null);
+  };
+
+  // Swipe anywhere on the panel to switch tabs (touch — doesn't block scroll,
+  // only acts on a clearly horizontal gesture at touch end).
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const onPanelTouchStart = (event: ReactTouchEvent) => {
+    if (event.touches.length !== 1) {
+      swipeStartRef.current = null;
+      return;
+    }
+    swipeStartRef.current = {
+      x: event.touches[0].clientX,
+      y: event.touches[0].clientY,
+    };
+  };
+  const onPanelTouchEnd = (event: ReactTouchEvent) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    if (dx < 0 && activeTab === "9909") handleTabChange("2505");
+    else if (dx > 0 && activeTab === "2505") handleTabChange("9909");
   };
 
   const deleteTicket = useCallback((ticketId: string) => {
@@ -266,18 +300,11 @@ export default function KasperPage() {
             key={activeTab}
             className={styles.panel}
             role="tabpanel"
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.18}
-            onDragEnd={(_, info) => {
-              const left = info.offset.x < -60 || info.velocity.x < -450;
-              const right = info.offset.x > 60 || info.velocity.x > 450;
-              if (left && activeTab === "9909") handleTabChange("2505");
-              else if (right && activeTab === "2505") handleTabChange("9909");
-            }}
-            initial={{ opacity: 0, x: activeTab === "2505" ? 14 : -14 }}
+            onTouchStart={onPanelTouchStart}
+            onTouchEnd={onPanelTouchEnd}
+            initial={{ opacity: 0, x: activeTab === "2505" ? 22 : -22 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: activeTab === "2505" ? -14 : 14 }}
+            exit={{ opacity: 0, x: activeTab === "2505" ? -22 : 22 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
             <div className={styles.list}>

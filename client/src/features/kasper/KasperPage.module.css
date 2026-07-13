@@ -25,7 +25,10 @@
   /* размер QR задаётся в TicketSheet.tsx: <QRCodeSVG size={168} /> */
   /* ============================================== */
 
-  min-height: 100dvh;
+  height: 100vh; /* fallback for browsers without dvh */
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--kasper-bg);
   color: var(--kasper-text);
   font-family:
@@ -41,11 +44,12 @@
 
 .shell {
   display: flex;
-  min-height: 100dvh;
+  height: 100%;
   width: 100%;
   max-width: 430px;
   margin: 0 auto;
   flex-direction: column;
+  overflow: hidden;
   background: var(--kasper-bg);
 }
 
@@ -171,6 +175,8 @@
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 16px 16px 12px;
   scrollbar-width: none;
 }

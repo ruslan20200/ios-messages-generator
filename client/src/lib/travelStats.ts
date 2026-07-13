@@ -83,6 +83,9 @@ const STORAGE_KEY_MESSAGES_API = "ios_msg_history_api";
 const SESSION_STORAGE_KEY_MESSAGES_API = "ios_msg_history_api_session";
 const STORAGE_KEY_MESSAGES_2505 = "ios_msg_history_2505";
 const SESSION_STORAGE_KEY_MESSAGES_2505 = "ios_msg_history_2505_session";
+// MODIFIED BY AI: 2026-07-14 - count Kasper (9909/2505) tickets in travel stats
+const STORAGE_KEY_MESSAGES_KASPER = "ios_msg_history_kasper";
+const SESSION_STORAGE_KEY_MESSAGES_KASPER = "ios_msg_history_kasper_session";
 export const TRAVEL_STATS_MIN_DATE = new Date(2025, 0, 1);
 
 const pricePattern = /(\d[\d\s]*)\s*(?:₸|в‚ё)/;
@@ -175,8 +178,12 @@ export const readTravelRides = (): TravelRide[] => {
     SESSION_STORAGE_KEY_MESSAGES_2505,
     STORAGE_KEY_MESSAGES_2505,
   );
+  const kasperMessages = readStoredMessages(
+    SESSION_STORAGE_KEY_MESSAGES_KASPER,
+    STORAGE_KEY_MESSAGES_KASPER,
+  );
 
-  return [...manualMessages, ...apiMessages, ...chat2505Messages]
+  return [...manualMessages, ...apiMessages, ...chat2505Messages, ...kasperMessages]
     .map((message) => toRide(message))
     .filter((ride): ride is TravelRide => Boolean(ride))
     .sort((left, right) => left.timestamp.getTime() - right.timestamp.getTime());
