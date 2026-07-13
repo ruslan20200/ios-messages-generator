@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Camera, RefreshCw, ScanLine, XCircle } from "lucide-react";
+import { Camera, ChevronRight, QrCode, RefreshCw, ScanLine, X, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,10 +11,25 @@ import {
 } from "@/components/ui/sheet";
 import { extractOnayTerminalId } from "@/lib/qr";
 
+type QrParseResult = { ok: true; value: string } | { ok: false; error: string };
+
 type QrScannerSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onDetected: (terminalId: string) => void;
+  onDetected: (value: string) => void;
+  /** Decode a raw QR string into a code. Defaults to the Onay terminal parser. */
+  parse?: (raw: string) => QrParseResult;
+  title?: string;
+  description?: string;
+  /** "kaspi" = full-screen Kaspi-QR styling; "default" = dark bottom sheet. */
+  variant?: "default" | "kaspi";
+};
+
+const defaultParse = (raw: string): QrParseResult => {
+  const parsed = extractOnayTerminalId(raw);
+  return parsed.ok
+    ? { ok: true, value: parsed.terminalId }
+    : { ok: false, error: parsed.error };
 };
 
 type BarcodeDetectorResult = {
@@ -49,7 +64,15 @@ const getBarcodeDetectorConstructor = (): BarcodeDetectorConstructor | null => {
   return maybeConstructor as BarcodeDetectorConstructor;
 };
 
-export function QrScannerSheet({ open, onOpenChange, onDetected }: QrScannerSheetProps) {
+export function QrScannerSheet({
+  open,
+  onOpenChange,
+  onDetected,
+  parse = defaultParse,
+  title = "Сканер QR терминала",
+  description = "Поддерживается формат: http://c.onay.kz/<TERMINAL_ID>",
+  variant = "default",
+}: QrScannerSheetProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -102,7 +125,7 @@ export function QrScannerSheet({ open, onOpenChange, onDetected }: QrScannerShee
 
   const handleDetection = useCallback(
     (rawValue: string) => {
-      const parsed = extractOnayTerminalId(rawValue);
+      const parsed = parse(rawValue);
 
       if (!parsed.ok) {
         setErrorMessage(parsed.error);
@@ -111,10 +134,10 @@ export function QrScannerSheet({ open, onOpenChange, onDetected }: QrScannerShee
       }
 
       stopScanner();
-      onDetected(parsed.terminalId);
+      onDetected(parsed.value);
       onOpenChange(false);
     },
-    [onDetected, onOpenChange, stopScanner],
+    [onDetected, onOpenChange, parse, stopScanner],
   );
 
   const decodeWithJsQr = useCallback(async (): Promise<string | null> => {
@@ -284,6 +307,116 @@ export function QrScannerSheet({ open, onOpenChange, onDetected }: QrScannerShee
     void startScannerRef.current?.();
   }, [open, stopScanner]);
 
+  if (variant === "kaspi") {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent
+          side="bottom"
+          className="flex h-[100dvh] max-h-[100dvh] flex-col gap-0 rounded-none border-0 bg-[#d6d6da] p-0 text-black [&>button]:hidden"
+        >
+          <SheetHeader className="relative flex-row items-center justify-center gap-2 bg-white px-4 py-3.5">
+            <QrCode size={22} className="text-[#f14635]" />
+            <SheetTitle className="text-lg font-bold text-black">{title}</SheetTitle>
+            <SheetDescription className="sr-only">{description}</SheetDescription>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              aria-label="Закрыть"
+              className="absolute top-1/2 right-4 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl bg-gray-200 text-gray-400 active:bg-gray-300"
+            >
+              <X size={22} strokeWidth={2.2} />
+            </button>
+          </SheetHeader>
+
+          <div className="relative flex flex-1 flex-col overflow-hidden">
+            <video
+              ref={videoRef}
+              className="absolute inset-0 h-full w-full object-cover"
+              muted
+              autoPlay
+              playsInline
+              aria-label="Камера для сканирования QR"
+            />
+            <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
+            {isStarting && (
+              <div className="absolute inset-0 flex items-center justify-center bg-[#d6d6da]">
+                <RefreshCw size={26} className="animate-spin text-gray-400" />
+              </div>
+            )}
+
+            {/* dark translucent mask with a clear scan window in the centre */}
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+              <div className="relative h-[248px] w-[248px] rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+                <span className="absolute -top-1.5 -left-1.5 h-9 w-9 rounded-tl-xl border-t-[5px] border-l-[5px] border-[#f14635]" />
+                <span className="absolute -top-1.5 -right-1.5 h-9 w-9 rounded-tr-xl border-t-[5px] border-r-[5px] border-[#f14635]" />
+                <span className="absolute -bottom-1.5 -left-1.5 h-9 w-9 rounded-bl-xl border-b-[5px] border-l-[5px] border-[#f14635]" />
+                <span className="absolute -right-1.5 -bottom-1.5 h-9 w-9 rounded-br-xl border-r-[5px] border-b-[5px] border-[#f14635]" />
+              </div>
+            </div>
+
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center px-6 pt-6">
+              <p className="min-h-[20px] px-4 text-center text-[15px] font-semibold text-white drop-shadow">
+                {statusMessage}
+              </p>
+            </div>
+
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center px-6 pb-5">
+              {errorMessage ? (
+                <div className="pointer-events-auto flex items-start gap-2 rounded-xl bg-white/95 px-3 py-2 text-[13px] text-[#b3261e]">
+                  <XCircle size={15} className="mt-0.5 shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+              ) : (
+                <p className="px-4 text-center text-[13px] text-white/90 drop-shadow">
+                  Наведите камеру на QR-код в рамку
+                </p>
+              )}
+              {!detectorSupported && (
+                <p className="mt-2 text-[11px] text-white/80 drop-shadow">
+                  Используется резервное распознавание.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-t-2xl bg-white px-5 pt-2 pb-[max(20px,env(safe-area-inset-bottom))]">
+            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-300" />
+            <h3 className="mb-1 text-xl font-bold text-black">Apply online</h3>
+
+            <div className="flex items-center gap-3 py-1.5">
+              <span className="grid h-8 w-14 shrink-0 place-items-center rounded-full bg-[#f14635] text-[12px] font-bold text-white">
+                0·0·3
+              </span>
+              <span className="flex-1 text-[15px] text-black">Buy-now-pay-later</span>
+              <ChevronRight size={18} className="text-gray-300" />
+            </div>
+
+            <div className="flex items-center gap-3 border-t border-gray-100 py-1.5">
+              <span className="grid h-8 w-14 shrink-0 place-items-center rounded-lg bg-[#f14635] text-[10px] font-bold text-white">
+                KREDIT
+              </span>
+              <span className="flex-1">
+                <span className="block text-[15px] text-black">Purchase Credit</span>
+                <span className="block text-xs text-gray-400">
+                  Buy on credit or buy-now-pay-later 0%
+                </span>
+              </span>
+              <ChevronRight size={18} className="text-gray-300" />
+            </div>
+
+            <div className="flex items-center gap-3 border-t border-gray-100 py-1.5">
+              <span className="grid h-8 w-14 shrink-0 place-items-center rounded-lg bg-[#f14635] text-[10px] font-bold text-white">
+                RED
+              </span>
+              <span className="flex-1 text-[15px] text-black">Kaspi Red</span>
+              <ChevronRight size={18} className="text-gray-300" />
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -291,9 +424,9 @@ export function QrScannerSheet({ open, onOpenChange, onDetected }: QrScannerShee
         className="rounded-t-3xl border-white/10 bg-[#101217] p-0 text-white shadow-[0_-14px_40px_rgba(0,0,0,0.45)]"
       >
         <SheetHeader className="space-y-1 px-4 pb-2 pt-4 text-left">
-          <SheetTitle className="text-base font-semibold text-white">Сканер QR терминала</SheetTitle>
+          <SheetTitle className="text-base font-semibold text-white">{title}</SheetTitle>
           <SheetDescription className="text-xs text-gray-400">
-            Поддерживается формат: http://c.onay.kz/&lt;TERMINAL_ID&gt;
+            {description}
           </SheetDescription>
         </SheetHeader>
 

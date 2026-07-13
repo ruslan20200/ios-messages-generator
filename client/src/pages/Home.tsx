@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Chat2505Card } from "@/components/Chat2505Card";
 import { TravelStatsPanel } from "@/components/TravelStatsPanel";
+import { readKasperPhone, saveKasperPhone } from "@/features/kasper/ticketService";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
@@ -110,7 +111,24 @@ export default function Home() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [, setLocation] = useLocation();
+  const [kasperPhone, setKasperPhone] = useState(() => readKasperPhone());
+  const [kasperAutoscan, setKasperAutoscan] = useState(
+    () => localStorage.getItem("kasper-autoscan") === "1",
+  );
   const autoScanEnabled = settings.autoScan === true;
+
+  const updateKasperPhone = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 10);
+    setKasperPhone(digits);
+    saveKasperPhone(digits);
+  };
+
+  const toggleKasperAutoscan = (on: boolean) => {
+    setKasperAutoscan(on);
+    localStorage.setItem("kasper-autoscan", on ? "1" : "0");
+  };
+
+  const openKasper = () => setLocation(kasperAutoscan ? "/kasper?scan=1" : "/kasper");
   const rememberedPassword = useMemo(
     () => (user?.login ? getRememberedPasswordForDevice(user.login) : null),
     [user?.login, rememberedPasswordRefreshKey],
@@ -492,6 +510,64 @@ export default function Home() {
             </AnimatePresence>
           </div>
         </motion.section>
+
+        {/* MODIFIED BY AI: 2026-07-13 - Kasper QR entry placed first, above the API card */}
+        {/* FILE: client/src/pages/Home.tsx */}
+        <motion.section
+          className={`${glassCardClass} p-4`}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...cardTransition, delay: 0.02 }}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-base font-semibold">{"через Kaspi-Qr"}</div>
+              <div className="text-sm text-gray-400">{"Чат QR-9909 и QR-2505 с карточкой билета"}</div>
+            </div>
+            <Button
+              onClick={openKasper}
+              className="h-10 rounded-xl bg-ios-blue px-4 text-sm font-semibold transition-all duration-200 active:scale-[0.98]"
+            >
+              {"Открыть"}
+            </Button>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-[#11141d]/80 px-3 py-2.5">
+            <div className="pr-3">
+              <div className="text-sm font-medium text-gray-100">{"Автоскан"}</div>
+              <div className="text-xs text-gray-400">
+                {"При «Открыть» сразу запускается камера (9909 и 2505)"}
+              </div>
+            </div>
+            <Switch
+              checked={kasperAutoscan}
+              onCheckedChange={toggleKasperAutoscan}
+              aria-label="Переключить автоскан Kaspi-QR"
+              className="h-8 w-[56px] border border-white/15 bg-[#2b2f3b] shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)] data-[state=checked]:bg-ios-blue data-[state=checked]:shadow-[0_0_0_1px_rgba(10,132,255,0.35)] data-[state=unchecked]:bg-[#2b2f3b]"
+              thumbClassName="size-7 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.35)] data-[state=checked]:translate-x-[calc(100%-5px)] data-[state=unchecked]:translate-x-[1px]"
+            />
+          </div>
+
+          <div className="mt-4 border-t border-white/8 pt-3">
+            <label htmlFor="kasper-phone" className="ml-1 text-sm text-gray-300">
+              {"Номер телефона для билета"}
+            </label>
+            <div className="mt-2 flex h-12 items-center gap-2 rounded-2xl border border-white/12 bg-[#191c24]/80 px-4 focus-within:border-white/25">
+              <span className="text-gray-400">+7</span>
+              <input
+                id="kasper-phone"
+                inputMode="numeric"
+                autoComplete="off"
+                value={kasperPhone}
+                onChange={(e) => updateKasperPhone(e.target.value)}
+                placeholder="777 777 77 77"
+                maxLength={10}
+                className="min-w-0 flex-1 bg-transparent text-white placeholder:text-gray-500 outline-none"
+              />
+            </div>
+          </div>
+        </motion.section>
+
         <motion.section
           className={`${glassCardClass} p-4`}
           initial={{ opacity: 0, y: 16 }}

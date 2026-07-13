@@ -1,0 +1,655 @@
+.page {
+  --kasper-red: #f14635;
+  --kasper-blue: #007aff;
+  --kasper-blue-press: #006ed5;
+  --kasper-bg: #f2f2f7;
+  --kasper-surface: #ffffff;
+  --kasper-text: #1f1f1f;
+  --kasper-text-secondary: #6f6f76;
+  --kasper-line: #e5e5ea;
+  --kasper-error: #d93a2b;
+
+  /* ===== НАСТРОЙКИ БИЛЕТА — меняй числа здесь ===== */
+  --ticket-gap-header-check: 35px; /* между заголовком «Оплата...» и галочкой */
+  --ticket-gap-check-title: 25px; /* между галочкой и «Билет активен» */
+  --ticket-gap-title-timer: 8px; /* между «Билет активен» и таймером */
+  --ticket-status-icon-size: 52px; /* размер зелёного кружка с галочкой */
+  --ticket-timer-size: 35px; /* размер таймера */
+  --ticket-status-weight: 500; /* жирность «Билет активен» (400–700) */
+  --ticket-timer-weight: 600; /* жирность таймера отдельно (400–700) */
+  --ticket-detail-value-size: 15.5px; /* размер значений в реквизитах */
+  --ticket-detail-weight: 300; /* жирность значений во 2-м блоке (300–600) */
+  --ticket-detail-row-min: 44px; /* высота строки реквизита */
+  --ticket-status-pad-bottom: 24px; /* отступ снизу после таймера (внутри блока) */
+  --ticket-qr-pad-top: 15px; /* отступ QR сверху (меньше = выше) */
+  /* размер QR задаётся в TicketSheet.tsx: <QRCodeSVG size={168} /> */
+  /* ============================================== */
+
+  min-height: 100dvh;
+  background: var(--kasper-bg);
+  color: var(--kasper-text);
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "SF Pro Display",
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
+}
+
+.shell {
+  display: flex;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  flex-direction: column;
+  background: var(--kasper-bg);
+}
+
+.header {
+  position: relative;
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: center;
+  padding: max(10px, env(safe-area-inset-top)) 56px 10px;
+  background: var(--kasper-surface);
+  border-bottom: 1px solid var(--kasper-line);
+}
+
+.backButton,
+.closeButton,
+.deleteButton {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.backButton {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  color: #8a8a8f;
+  background: transparent;
+}
+
+.closeButton:active,
+.deleteButton:active {
+  transform: scale(0.95);
+}
+
+.backButton:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.tabs {
+  position: relative;
+  display: grid;
+  height: 50px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 14px 16px 2px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #e4e4ea;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  touch-action: manipulation;
+}
+
+.tabIndicator {
+  position: absolute;
+  inset: 4px auto 4px 4px;
+  width: calc(50% - 4px);
+  border-radius: 11px;
+  background: var(--kasper-blue);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.32);
+  transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tabIndicatorSecond {
+  transform: translateX(100%);
+}
+
+.tab {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 11px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--kasper-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color 260ms ease,
+    transform 160ms ease;
+  font:
+    600 15px/1 Roboto,
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    sans-serif;
+}
+
+.tab:active {
+  transform: scale(0.97);
+}
+
+.tabActive {
+  color: #fff;
+}
+
+.panel {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 16px 16px 12px;
+  scrollbar-width: none;
+}
+
+.list::-webkit-scrollbar {
+  display: none;
+}
+
+.groupHead {
+  margin: 4px 4px 0;
+  color: var(--kasper-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.groupToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 0 0;
+  padding: 4px 4px;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--kasper-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.groupChevron {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.groupChevronOpen {
+  transform: rotate(180deg);
+}
+
+.listRow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.card {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--kasper-line);
+  border-radius: 16px;
+  padding: 14px 14px 14px 16px;
+  cursor: pointer;
+  background: var(--kasper-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  text-align: left;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.card:active {
+  transform: scale(0.99);
+  background: #fafafc;
+}
+
+.cardMain {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 5px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--kasper-text);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #34c759;
+  box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.18);
+}
+
+.dotExpired {
+  background: #ff3b30;
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.18);
+}
+
+.cardMeta {
+  font-size: 14px;
+  color: var(--kasper-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cardChevron {
+  flex: 0 0 auto;
+  color: #c2c2c9;
+}
+
+.deleteButton {
+  width: 52px;
+  border-radius: 16px;
+  color: var(--kasper-red);
+  background: #fff;
+  border: 1px solid var(--kasper-line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.composer {
+  border-top: 1px solid var(--kasper-line);
+  background: #fff;
+  padding: 12px 16px max(14px, env(safe-area-inset-bottom));
+}
+
+.composerLabel {
+  display: block;
+  margin: 0 0 7px;
+  color: var(--kasper-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.composerRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plusButton {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  background: #e9e9ee;
+  color: var(--kasper-blue);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background 200ms ease,
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.plusButton:hover {
+  background: #e0e0e6;
+}
+
+.plusButton:active {
+  transform: scale(0.9);
+}
+
+.plusButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.input {
+  min-width: 0;
+  height: 48px;
+  flex: 1;
+  border: 1px solid #d4d4dc;
+  border-radius: 24px;
+  padding: 0 16px;
+  background: #fff;
+  color: var(--kasper-text);
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+  font:
+    400 16px Roboto,
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    sans-serif;
+}
+
+.input:focus {
+  border-color: var(--kasper-blue);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+  outline: 0;
+}
+
+.submitButton {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  background: var(--kasper-blue);
+  color: #fff;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background 200ms ease,
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease;
+}
+
+.submitButton:hover {
+  background: var(--kasper-blue-press);
+}
+
+.submitButton:active {
+  transform: scale(0.9);
+}
+
+.submitButton:disabled {
+  cursor: not-allowed;
+  transform: scale(0.82);
+  opacity: 0.45;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.4px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: kasper-spin 0.7s linear infinite;
+}
+
+.processing {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.processingSpinner {
+  width: 46px;
+  height: 46px;
+  border: 4px solid rgba(241, 70, 53, 0.22);
+  border-top-color: var(--kasper-red);
+  border-radius: 50%;
+  animation: kasper-spin 0.75s linear infinite;
+}
+
+@keyframes kasper-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.errorText {
+  min-height: 19px;
+  margin: 6px 0 0;
+  color: var(--kasper-error);
+  font-size: 13px;
+}
+
+.shake {
+  animation: kasper-shake 0.4s ease-in-out;
+}
+
+.sheetOverlay {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.32);
+  cursor: pointer;
+}
+
+.ticketSheet {
+  position: fixed;
+  z-index: 71;
+  top: calc(max(10px, env(safe-area-inset-top)) + 54px);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: min(100%, 430px);
+  margin: 0 auto;
+  overflow-y: auto;
+  border-radius: 16px 16px 0 0;
+  background: var(--kasper-bg);
+  box-shadow: 0 -16px 44px rgba(0, 0, 0, 0.28);
+  overscroll-behavior: contain;
+  transition:
+    top 420ms cubic-bezier(0.32, 0.72, 0, 1),
+    padding-top 420ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.sheetExpanded {
+  top: 0;
+  padding-top: env(safe-area-inset-top);
+  border-radius: 0;
+}
+
+.dragHandle {
+  display: grid;
+  place-items: center;
+  padding: 8px 0 8px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.grabber {
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: #d0d0d6;
+}
+
+.closeButton {
+  width: 36px;
+  height: 36px;
+  margin: -4px -6px -4px 0;
+  color: var(--kasper-text-secondary);
+  background: transparent;
+}
+
+.ticketContent {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 6px max(14px, env(safe-area-inset-bottom));
+}
+
+.statusHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--ticket-gap-header-check);
+}
+
+.statusHead h2 {
+  margin: 0;
+  color: var(--kasper-text);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.statusCard,
+.detailsCard,
+.qrCard {
+  border-radius: 18px;
+  background: #fff;
+}
+
+.statusCard {
+  padding: 4px 18px var(--ticket-status-pad-bottom);
+  text-align: center;
+}
+
+.successIcon {
+  display: grid;
+  width: var(--ticket-status-icon-size);
+  height: var(--ticket-status-icon-size);
+  margin: 0 auto var(--ticket-gap-check-title);
+  place-items: center;
+  border-radius: 50%;
+  background: #25ae09;
+  color: #fff;
+}
+
+.expiredIcon {
+  background: #ff3b30;
+}
+
+.timerExpired {
+  color: #ff3b30;
+}
+
+.statusCard p {
+  margin: 0;
+  font-size: 21px;
+  font-weight: var(--ticket-status-weight);
+  letter-spacing: -0.03em;
+}
+
+.statusCard strong {
+  display: block;
+  margin-top: var(--ticket-gap-title-timer);
+  font-size: var(--ticket-timer-size);
+  font-weight: var(--ticket-timer-weight);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.detailsCard {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px 14px;
+}
+
+.detailItem {
+  min-height: var(--ticket-detail-row-min);
+  padding: 8px 6px;
+  border-bottom: 1px solid #f1f1f4;
+}
+
+.detailItem:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.detailItem span {
+  display: block;
+  color: var(--kasper-text-secondary);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.detailItem strong {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  font-size: var(--ticket-detail-value-size);
+  font-weight: var(--ticket-detail-weight);
+  line-height: 1.25;
+}
+
+.qrCard {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--ticket-qr-pad-top) 16px 16px;
+  text-align: center;
+}
+
+.qrFrame {
+  display: inline-flex;
+  padding: 6px;
+  border-radius: 14px;
+  background: #fff;
+}
+
+@keyframes kasper-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-9px);
+  }
+  40% {
+    transform: translateX(8px);
+  }
+  60% {
+    transform: translateX(-6px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page *,
+  .page *::before,
+  .page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

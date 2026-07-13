@@ -26,23 +26,22 @@ const readCachedUser = (): CachedUser | null => {
   }
 };
 
-const isAllowedRouteForRole = (route: string, role: CachedUserRole) => {
-  if (role === "admin") {
-    // MODIFIED BY AI: 2026-03-19 - keep admin startup inside the normal app flow; admin panel stays an explicit destination from Home
-    // FILE: client/src/lib/bootstrapRoute.ts
-    return (
-      route.startsWith("/chat") ||
-      route.startsWith("/home") ||
-      route.startsWith("/qr/")
-    );
-  }
-
-  return route.startsWith("/chat") || route.startsWith("/home") || route.startsWith("/qr/");
+const isAllowedRouteForRole = (route: string, _role: CachedUserRole) => {
+  // MODIFIED BY AI: 2026-07-14 - allow /kasper so PWA reopens on the last screen
+  // FILE: client/src/lib/bootstrapRoute.ts
+  return (
+    route.startsWith("/chat") ||
+    route.startsWith("/home") ||
+    route.startsWith("/qr/") ||
+    route.startsWith("/kasper")
+  );
 };
 
 export const rememberLastAuthedRoute = (route: string, role: CachedUserRole) => {
   if (!route || !isAllowedRouteForRole(route, role)) return;
-  localStorage.setItem(APP_LAST_ROUTE_STORAGE_KEY, route);
+  // Drop transient query (e.g. /kasper?scan=1) so a restart doesn't re-trigger it.
+  const normalized = route.startsWith("/kasper") ? "/kasper" : route;
+  localStorage.setItem(APP_LAST_ROUTE_STORAGE_KEY, normalized);
 };
 
 export const resolveBootstrapRoute = () => {

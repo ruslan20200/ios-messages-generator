@@ -29,7 +29,7 @@ export default defineConfig(({ command, mode }) => {
             handler: "NetworkFirst",
             options: {
               cacheName: "app-pages",
-              networkTimeoutSeconds: 3,
+              networkTimeoutSeconds: 2,
               expiration: {
                 maxEntries: 20,
                 maxAgeSeconds: 60 * 60 * 24,
@@ -141,6 +141,8 @@ export default defineConfig(({ command, mode }) => {
       "127.0.0.1",
       ".ngrok-free.app",
       "21262ba387b7.ngrok-free.app",
+      ".loca.lt",
+      ".trycloudflare.com",
     ],
     fs: {
       strict: true,

@@ -17,6 +17,7 @@ const loadHomePage = () => import("@/pages/Home");
 const loadLoginPage = () => import("@/pages/Login");
 const loadNotFoundPage = () => import("@/pages/NotFound");
 const loadQrPage = () => import("@/pages/QrPage");
+const loadKasperPage = () => import("@/features/kasper/KasperPage");
 
 const Admin = lazy(loadAdminPage);
 const Chat = lazy(loadChatPage);
@@ -25,6 +26,7 @@ const Home = lazy(loadHomePage);
 const Login = lazy(loadLoginPage);
 const NotFound = lazy(loadNotFoundPage);
 const QrPage = lazy(loadQrPage);
+const KasperPage = lazy(loadKasperPage);
 
 const runWhenIdle = (task: () => void): (() => void) => {
   const win = window as Window & {
@@ -197,6 +199,15 @@ function Router() {
           </AuthGuard>
         )}
       </Route>
+      <Route path="/kasper">
+        {() => (
+          <AuthGuard>
+            <MobileOnly>
+              <KasperPage />
+            </MobileOnly>
+          </AuthGuard>
+        )}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -225,6 +236,7 @@ function App() {
             runWhenIdle(() => {
               void loadAdminPage();
               void loadQrPage();
+              void loadKasperPage();
             }),
           );
         }),
