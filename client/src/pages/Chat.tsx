@@ -720,11 +720,13 @@ export default function Chat() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* MODIFIED BY AI: 2026-07-16 - no safe-area padding: composer sits at the bottom
+          exactly as before viewport-fit=cover (this screen is pixel-tuned to mimic iOS) */}
+      {/* FILE: client/src/pages/Chat.tsx */}
       <div
-        className="fixed left-0 right-0 z-50 safe-area-bottom"
+        className="fixed left-0 right-0 z-50"
         style={{
           bottom: composerBottomOffset,
-          paddingBottom: keyboardOffset > 0 ? 0 : undefined,
         }}
       >
         <div className="mx-auto flex w-full max-w-md items-end gap-1.5 px-2.5 pb-1.5">
