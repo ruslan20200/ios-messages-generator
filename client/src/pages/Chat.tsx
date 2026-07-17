@@ -720,8 +720,10 @@ export default function Chat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* MODIFIED BY AI: 2026-07-16 - no safe-area padding: composer sits at the bottom
-          exactly as before viewport-fit=cover (this screen is pixel-tuned to mimic iOS) */}
+      {/* MODIFIED BY AI: 2026-07-16 - no safe-area-bottom padding. This screen is pixel-tuned
+          to mimic iOS and runs as a standalone PWA (black-translucent), where the viewport was
+          already full-screen — viewport-fit=cover only made env() resolve, so that padding
+          lifted the composer ~34px off its tuned offset. */}
       {/* FILE: client/src/pages/Chat.tsx */}
       <div
         className="fixed left-0 right-0 z-50"

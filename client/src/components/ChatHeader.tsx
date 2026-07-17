@@ -28,8 +28,12 @@ export function ChatHeader({ title, subTitle, badge }: ChatHeaderProps) {
     [location, navigate],
   );
 
+  // MODIFIED BY AI: 2026-07-16 - no safe-area-top: the pills below already clear the notch by
+  // hand (mt-10/mt-18) and Chat.tsx offsets content with a fixed pt-[148px] tuned to that.
+  // Adding env() padding here shifts the header ~47px down into the first message.
+  // FILE: client/src/components/ChatHeader.tsx
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 safe-area-top">
+    <header className="fixed top-0 left-0 right-0 z-50">
       <div className="h-[44px] flex items-center justify-between px-2 w-full max-w-md mx-auto">
         <Link
           href="/"
