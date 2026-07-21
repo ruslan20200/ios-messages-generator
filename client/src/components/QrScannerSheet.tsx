@@ -314,10 +314,7 @@ export function QrScannerSheet({
           side="bottom"
           className="flex h-[100dvh] max-h-[100dvh] flex-col gap-0 rounded-none border-0 bg-[#d6d6da] p-0 text-black [&>button]:hidden"
         >
-          <SheetHeader
-            className="relative flex-row items-center justify-center gap-2 bg-white px-4 pb-3.5"
-            style={{ paddingTop: "calc(0.875rem + env(safe-area-inset-top))" }}
-          >
+          <SheetHeader className="relative flex-row items-center justify-center gap-2 bg-white px-4 py-3.5">
             <QrCode size={22} className="text-[#f14635]" />
             <SheetTitle className="text-lg font-bold text-black">{title}</SheetTitle>
             <SheetDescription className="sr-only">{description}</SheetDescription>
@@ -325,8 +322,7 @@ export function QrScannerSheet({
               type="button"
               onClick={() => onOpenChange(false)}
               aria-label="Закрыть"
-              style={{ top: "calc(50% + env(safe-area-inset-top) / 2)" }}
-              className="absolute right-4 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl bg-gray-200 text-gray-400 active:bg-gray-300"
+              className="absolute top-1/2 right-4 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl bg-gray-200 text-gray-400 active:bg-gray-300"
             >
               <X size={22} strokeWidth={2.2} />
             </button>
